@@ -5,21 +5,35 @@ Test Claude Code's ability to create a GitHub PR in a Novita sandbox.
 This script:
 1. Creates a sandbox from our custom template
 2. Sets up Anthropic and GitHub credentials
-3. Asks Claude to clone the repo and create a simple PR
+3. Asks Claude to execute a custom prompt
 
 Usage:
+    python scripts/test_claude_github.py [prompt] [--verbose] [--stream-json]
+
+Examples:
+    # Use default PR creation prompt
     python scripts/test_claude_github.py
+
+    # Custom prompt
+    python scripts/test_claude_github.py "List all Python files in the repo"
+
+    # With verbose output
+    python scripts/test_claude_github.py "Create a PR" --verbose
+
+    # With streaming JSON output
+    python scripts/test_claude_github.py "Create a PR" --stream-json
 """
 
 import os
 import sys
+import argparse
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
 
 load_dotenv()
 
 
-def test_claude_github():
+def test_claude_github(prompt=None, verbose=False, stream_json=False):
     """Test Claude Code + GitHub integration."""
     print("=" * 60)
     print("Testing Claude Code + GitHub Integration")
@@ -78,17 +92,30 @@ def test_claude_github():
         print("✓ Repository cloned")
         print()
 
-        # Run Claude Code to create a PR
-        print("Running Claude Code to create a PR...")
-        print("(this will take a few minutes...)")
+        # Prepare the prompt
+        if prompt is None:
+            prompt = "Create a new branch called 'add-test-file', add a simple test.py file with a hello world function, commit it with a descriptive message, push the branch, and create a pull request with title 'Add test.py file'"
+
+        print(f"Running Claude Code with prompt: {prompt[:100]}...")
+        if len(prompt) > 100:
+            print(f"  (full prompt: {len(prompt)} characters)")
+        print("(this may take a few minutes...)")
         print("-" * 60)
 
-        # Use environment variables passed to sandbox
-        # Following E2B example: pipe prompt into claude with -p flag
+        # Build Claude command
         # -p/--print: non-interactive mode (skips workspace trust dialog)
         # --dangerously-skip-permissions: bypass all permission checks (safe in sandbox)
-        claude_command = """cd /home/user/cloud-agent && \
-echo "Create a new branch called 'add-test-file', add a simple test.py file with a hello world function, commit it with a descriptive message, push the branch, and create a pull request with title 'Add test.py file'" | claude -p --dangerously-skip-permissions"""
+        claude_flags = "-p --dangerously-skip-permissions"
+
+        # stream-json requires verbose
+        if stream_json:
+            claude_flags += " --verbose --output-format stream-json"
+        elif verbose:
+            claude_flags += " --verbose"
+
+        # Escape the prompt for shell
+        escaped_prompt = prompt.replace('"', '\\"')
+        claude_command = f'cd /home/user/cloud-agent && echo "{escaped_prompt}" | claude {claude_flags}'
 
         result = sandbox.commands.run(claude_command, timeout=0)
 
@@ -122,4 +149,40 @@ echo "Create a new branch called 'add-test-file', add a simple test.py file with
 
 
 if __name__ == "__main__":
-    test_claude_github()
+    parser = argparse.ArgumentParser(
+        description="Test Claude Code + GitHub integration in Novita sandbox",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use default PR creation prompt
+  python scripts/test_claude_github.py
+
+  # Custom prompt
+  python scripts/test_claude_github.py "List all Python files in the repo"
+
+  # With verbose output to see intermediate steps
+  python scripts/test_claude_github.py "Create a PR" --verbose
+
+  # With streaming JSON output
+  python scripts/test_claude_github.py "Create a PR" --stream-json
+        """
+    )
+    parser.add_argument(
+        "prompt",
+        nargs="?",
+        default=None,
+        help="Prompt to send to Claude Code (default: create a test PR)"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output to see Claude's intermediate steps"
+    )
+    parser.add_argument(
+        "--stream-json",
+        action="store_true",
+        help="Enable streaming JSON output format"
+    )
+
+    args = parser.parse_args()
+    test_claude_github(prompt=args.prompt, verbose=args.verbose, stream_json=args.stream_json)
