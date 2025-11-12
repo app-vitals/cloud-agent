@@ -1,0 +1,20 @@
+[project]
+name = "cloud-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Dan McAulay", email = "dmcaulay@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "e2b-code-interpreter>=2.3.0",
+    "python-dotenv>=1.2.1",
+]
+
+[project.scripts]
+cloud-agent = "app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
