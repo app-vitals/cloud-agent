@@ -20,6 +20,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Install PostgreSQL and Redis servers
+RUN apt-get update && apt-get install -y \
+    postgresql \
+    postgresql-contrib \
+    redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install GitHub CLI
 RUN mkdir -p /etc/apt/keyrings \
     && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
@@ -29,6 +36,10 @@ RUN mkdir -p /etc/apt/keyrings \
     && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv (fast Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
 # Install Claude Code CLI globally
 # Note: This installs to /usr/local which should be accessible
 RUN npm install -g @anthropic-ai/claude-code
@@ -37,7 +48,14 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN node --version \
     && npm --version \
     && gh --version \
-    && claude --version
+    && claude --version \
+    && uv --version \
+    && psql --version \
+    && redis-server --version
+
+# Copy startup script for services
+COPY start-services.sh /usr/local/bin/start-services
+RUN chmod +x /usr/local/bin/start-services
 
 # Set working directory
 WORKDIR /workspace

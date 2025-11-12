@@ -62,6 +62,48 @@ def test_template():
         else:
             print(f"⚠️  gh CLI not found")
 
+        # Test if uv is pre-installed
+        print("\nTesting if uv is pre-installed...")
+        result = sandbox.commands.run("uv --version")
+        if result.exit_code == 0:
+            print(f"✓ uv installed: {result.stdout.strip()}")
+        else:
+            print(f"⚠️  uv not found")
+
+        # Test if PostgreSQL is pre-installed
+        print("\nTesting if PostgreSQL is pre-installed...")
+        result = sandbox.commands.run("psql --version")
+        if result.exit_code == 0:
+            print(f"✓ PostgreSQL installed: {result.stdout.strip()}")
+        else:
+            print(f"⚠️  PostgreSQL not found")
+
+        # Test if Redis is pre-installed
+        print("\nTesting if Redis is pre-installed...")
+        result = sandbox.commands.run("redis-server --version")
+        if result.exit_code == 0:
+            print(f"✓ Redis installed: {result.stdout.strip()}")
+        else:
+            print(f"⚠️  Redis not found")
+
+        # Test if services can be started
+        print("\nTesting if start-services script is available...")
+        result = sandbox.commands.run("which start-services")
+        if result.exit_code == 0:
+            print(f"✓ start-services script found at: {result.stdout.strip()}")
+            print("\nTesting if PostgreSQL and Redis can be started...")
+            result = sandbox.commands.run("start-services")
+            if result.exit_code == 0:
+                print("✓ Services started successfully")
+                print(result.stdout)
+            else:
+                print(f"⚠️  Failed to start services")
+                print(f"   Exit code: {result.exit_code}")
+                if result.stderr:
+                    print(f"   Error: {result.stderr}")
+        else:
+            print(f"⚠️  start-services script not found")
+
         # Cleanup
         print("\n🧹 Cleaning up...")
         sandbox.kill()
