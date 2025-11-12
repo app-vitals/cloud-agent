@@ -50,35 +50,54 @@ def test_claude_github():
     print()
 
     try:
-        # Create sandbox
-        sandbox = Sandbox.create(template=template_name)
+        # Create sandbox with environment variables
+        sandbox = Sandbox.create(
+            template=template_name,
+            envs={
+                "ANTHROPIC_API_KEY": anthropic_key,
+                "GITHUB_TOKEN": github_token,
+            }
+        )
         print(f"✓ Sandbox created successfully!")
         print(f"  Sandbox ID: {sandbox.sandbox_id}")
         print()
 
-        # Set up git config
-        print("Setting up git and GitHub CLI...")
+        # Set up git config (gh CLI will use GITHUB_TOKEN env var automatically)
+        print("Setting up git config...")
         sandbox.commands.run('git config --global user.email "test@cloudagent.dev"')
         sandbox.commands.run('git config --global user.name "Cloud Agent Test"')
-        sandbox.commands.run(f'echo "{github_token}" | gh auth login --with-token')
-        print("✓ Git and GitHub configured")
+        print("✓ Git configured")
         print()
 
-        # Run Claude Code with task
+        # Clone the repo first
+        print("Cloning repository...")
+        result = sandbox.commands.run("git clone https://github.com/app-vitals/cloud-agent.git /home/user/cloud-agent")
+        if result.exit_code != 0:
+            print(f"❌ Failed to clone repo: {result.stderr}")
+            sys.exit(1)
+        print("✓ Repository cloned")
+        print()
+
+        # Run Claude Code to create a PR
         print("Running Claude Code to create a PR...")
+        print("(this will take a few minutes...)")
         print("-" * 60)
 
-        # Use ANTHROPIC_API_KEY env var and run Claude Code
-        claude_command = f"""export ANTHROPIC_API_KEY="{anthropic_key}" && \
-claude --model claude-sonnet-4-5 "Clone https://github.com/app-vitals/cloud-agent, create a new branch called 'test-claude-integration', add a line to the README mentioning this PR was created by Claude Code in a sandbox, commit it, and create a pull request with title 'Test: Claude Code integration'" </dev/null"""
+        # Use environment variables passed to sandbox
+        # Following E2B example: pipe prompt into claude with -p flag
+        # -p/--print: non-interactive mode (skips workspace trust dialog)
+        # --dangerously-skip-permissions: bypass all permission checks (safe in sandbox)
+        claude_command = """cd /home/user/cloud-agent && \
+echo "Create a new branch called 'add-test-file', add a simple test.py file with a hello world function, commit it with a descriptive message, push the branch, and create a pull request with title 'Add test.py file'" | claude -p --dangerously-skip-permissions"""
 
-        result = sandbox.commands.run(claude_command, timeout=180)
+        result = sandbox.commands.run(claude_command, timeout=0)
 
         print("Claude Code output:")
         print(result.stdout)
         if result.stderr:
             print("\nStderr:")
             print(result.stderr)
+
         print("-" * 60)
         print()
 
