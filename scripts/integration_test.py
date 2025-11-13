@@ -32,7 +32,7 @@ def main():
     # Create a test task
     print("2. Creating a test task...")
     task_data = {
-        "prompt": "Create a file called hello.txt with the content 'Hello from Cloud Agent!'",
+        "prompt": "Create a file called hello.txt with the text 'Hello \"World\"!'",
         "repository_url": "https://github.com/anthropics/anthropic-sdk-python.git",
     }
 
@@ -82,16 +82,36 @@ def main():
     print(f"   Status: {task['status']}")
 
     if task.get("result"):
-        print("   Result preview (first 500 chars):")
-        print(f"   {task['result'][:500]}")
+        print(f"   Result: {task['result']}")
+
+    # Fetch task logs
+    print("\n5. Fetching task logs...")
+    try:
+        response = httpx.get(f"{API_BASE_URL}/v1/tasks/{task_id}/logs", timeout=10.0)
+        response.raise_for_status()
+        logs_data = response.json()
+        logs = logs_data["logs"]
+        total = logs_data["total"]
+
+        print(f"   ✓ Retrieved {len(logs)} of {total} log entries")
+        print("\n   === Task Execution Logs ===")
+
+        for log in logs[:50]:  # Show first 50 log entries
+            stream = log["stream"]
+            content = log["content"][:100]  # Truncate long lines
+            print(f"   [{stream}] {content}...")
+
+        if total > 50:
+            print(f"\n   ... and {total - 50} more log entries")
+
+    except Exception as e:
+        print(f"   ✗ Error fetching logs: {e}")
 
     if task["status"] == "completed":
         print("\n✓ Integration test PASSED!")
         return 0
     else:
         print(f"\n✗ Integration test FAILED - task status: {task['status']}")
-        if task.get("result"):
-            print(f"\nFull result:\n{task['result']}")
         return 1
 
 

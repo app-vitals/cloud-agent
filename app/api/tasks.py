@@ -41,6 +41,26 @@ class TaskListResponse(BaseModel):
     offset: int
 
 
+class TaskLogResponse(BaseModel):
+    """Response model for a task log entry."""
+
+    id: str
+    created_at: datetime
+    task_id: str
+    stream: str
+    format: str
+    content: str
+
+
+class TaskLogListResponse(BaseModel):
+    """Response model for list of task logs."""
+
+    logs: list[TaskLogResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(task_data: TaskCreate):
     """Create a new task."""
@@ -104,6 +124,41 @@ def list_tasks(limit: int = 100, offset: int = 0):
 
     return TaskListResponse(
         tasks=task_responses,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/tasks/{task_id}/logs", response_model=TaskLogListResponse)
+def get_task_logs(task_id: UUID, limit: int = 100, offset: int = 0):
+    """Get logs for a task with pagination."""
+    try:
+        # Verify task exists
+        TaskService.get_task_by_id(task_id)
+
+        # Get logs
+        logs, total = TaskService.get_task_logs(task_id, limit=limit, offset=offset)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+    log_responses = [
+        TaskLogResponse(
+            id=str(log.id),
+            created_at=log.created_at,
+            task_id=str(log.task_id),
+            stream=log.stream,
+            format=log.format,
+            content=log.content,
+        )
+        for log in logs
+    ]
+
+    return TaskLogListResponse(
+        logs=log_responses,
         total=total,
         limit=limit,
         offset=offset,

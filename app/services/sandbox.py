@@ -3,6 +3,7 @@
 import logging
 import os
 
+from e2b.sandbox.commands.command_handle import CommandExitException
 from e2b_code_interpreter import Sandbox
 
 from app.core.config import settings
@@ -33,16 +34,19 @@ class SandboxService:
         if not final_github_token:
             raise ValueError("GITHUB_TOKEN is required")
 
-        # Create sandbox with environment variables
+        # Create sandbox with environment variables and timeout
         sandbox = Sandbox.create(
             template="cloud-agent-v1",
+            timeout=settings.sandbox_timeout,
             envs={
                 "ANTHROPIC_API_KEY": final_anthropic_key,
                 "GITHUB_TOKEN": final_github_token,
             },
         )
 
-        logger.info(f"Created sandbox {sandbox.sandbox_id}")
+        logger.info(
+            f"Created sandbox {sandbox.sandbox_id} with {settings.sandbox_timeout}s timeout"
+        )
         return sandbox
 
     @staticmethod
@@ -71,32 +75,67 @@ class SandboxService:
 
     @staticmethod
     def run_claude_code(
-        sandbox: Sandbox, prompt: str, timeout: int = 0
+        sandbox: Sandbox, prompt: str, timeout: int | None = None
     ) -> tuple[int, str, str]:
         """Run Claude Code with the given prompt.
 
         Args:
             sandbox: The Novita sandbox instance
             prompt: The prompt to send to Claude Code
-            timeout: Command timeout in seconds (0 = no timeout)
+            timeout: Command timeout in seconds (None = use default from settings)
 
         Returns:
             Tuple of (exit_code, stdout, stderr)
         """
-        # Escape the prompt for shell
-        escaped_prompt = prompt.replace('"', '\\"')
+        # Use default timeout from settings if not provided
+        if timeout is None:
+            timeout = settings.claude_code_timeout
 
-        # Build Claude command
-        # -p/--print: non-interactive mode (skips workspace trust dialog)
-        # --dangerously-skip-permissions: bypass all permission checks (safe in sandbox)
-        claude_command = (
-            f"cd /home/user/repo && "
-            f'echo "{escaped_prompt}" | '
-            f"claude -p --dangerously-skip-permissions"
+        # Escape for bash -c with double quotes:
+        # Need to escape: double quotes, dollar signs, backticks, and backslashes
+        # Single quotes are safe inside double quotes and don't need escaping
+        escaped_prompt = (
+            prompt.replace("\\", "\\\\")  # Escape backslashes first
+            .replace('"', '\\"')  # Escape double quotes
+            .replace("$", "\\$")  # Escape dollar signs
+            .replace("`", "\\`")  # Escape backticks
         )
 
-        logger.info(f"Running Claude Code with prompt: {prompt[:100]}...")
-        result = sandbox.commands.run(claude_command, timeout=timeout)
+        # Build Claude command with timeout
+        # -p/--print: non-interactive mode (skips workspace trust dialog)
+        # --dangerously-skip-permissions: bypass all permission checks (safe in sandbox)
+        # --verbose --output-format stream-json: get structured output with logs
+        # timeout command: kills process after specified seconds, sends SIGTERM then SIGKILL
+        # Using bash -c with double quotes to avoid complex single quote escaping
+        claude_command = (
+            f"cd /home/user/repo && "
+            f'timeout {timeout} bash -c "echo \\"{escaped_prompt}\\" | '
+            f'claude -p --dangerously-skip-permissions --verbose --output-format stream-json"'
+        )
 
-        logger.info(f"Claude Code completed with exit code {result.exit_code}")
-        return result.exit_code, result.stdout, result.stderr
+        logger.info(
+            f"Running Claude Code with prompt: {prompt[:100]}... (timeout: {timeout}s)"
+        )
+
+        # Use a long timeout for sandbox.commands.run since we're handling timeout with bash
+        try:
+            result = sandbox.commands.run(claude_command, timeout=timeout + 30)
+            exit_code = result.exit_code
+            stdout = result.stdout
+            stderr = result.stderr
+        except CommandExitException as e:
+            # E2B raises exception for non-zero exit codes, but we can still get the output
+            exit_code = e.exit_code
+            stdout = e.stdout if hasattr(e, "stdout") else ""
+            stderr = e.stderr if hasattr(e, "stderr") else str(e)
+            logger.info(f"Claude Code exited with non-zero code {exit_code}")
+
+        logger.info(f"Claude Code completed with exit code {exit_code}")
+
+        # Exit code 124 means timeout killed the process
+        if exit_code == 124:
+            error_msg = f"Claude Code timed out after {timeout}s"
+            logger.warning(error_msg)
+            return 124, stdout, stderr + f"\n\n{error_msg}"
+
+        return exit_code, stdout, stderr
