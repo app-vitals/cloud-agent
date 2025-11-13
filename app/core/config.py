@@ -18,7 +18,9 @@ class Settings(BaseModel):
 
     # Database
     # Default uses postgres user with trust auth (configured in Novita sandbox via start-services.sh)
-    database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres@localhost/cloudagent")
+    database_url: str = os.getenv(
+        "DATABASE_URL", "postgresql://postgres@localhost/cloudagent"
+    )
 
     # Celery
     celery_broker_url: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379")
