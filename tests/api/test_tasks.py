@@ -135,10 +135,10 @@ def test_get_task_logs(test_client):
     assert data["limit"] == 100
     assert data["offset"] == 0
 
-    # Check first log
+    # Check first log (most recent, which is stderr due to desc order)
     assert data["logs"][0]["task_id"] == str(task.id)
-    assert data["logs"][0]["stream"] == "stdout"
-    assert data["logs"][0]["format"] == "json"
+    assert data["logs"][0]["stream"] == "stderr"
+    assert data["logs"][0]["format"] == "text"
     assert "id" in data["logs"][0]
     assert "created_at" in data["logs"][0]
 

@@ -121,13 +121,14 @@ def test_store_task_logs():
     logs, total = TaskService.get_task_logs(task.id)
 
     assert total == 3  # 2 stdout lines + 1 stderr
-    assert logs[0].stream == "stdout"
-    assert logs[0].format == "json"
+    # Logs are in descending order (most recent first)
+    assert logs[0].stream == "stderr"
+    assert logs[0].format == "text"
+    assert logs[0].content == stderr
     assert logs[1].stream == "stdout"
     assert logs[1].format == "json"
-    assert logs[2].stream == "stderr"
-    assert logs[2].format == "text"
-    assert logs[2].content == stderr
+    assert logs[2].stream == "stdout"
+    assert logs[2].format == "json"
 
 
 def test_get_task_logs_pagination():

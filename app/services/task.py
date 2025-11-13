@@ -160,4 +160,4 @@ class TaskService:
             )
             logs = session.execute(statement).scalars().all()
 
-            return list(logs), len(logs)
+            return list(logs), total
