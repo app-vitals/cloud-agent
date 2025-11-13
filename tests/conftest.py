@@ -17,9 +17,16 @@ os.environ["APP_ENV"] = "test"
 
 def create_test_task(
     prompt: str = "Test task prompt",
+    repository_url: str = "https://github.com/test/repo.git",
 ) -> Task:
     """Helper function to create a test task with default values."""
-    return TaskService.create_task(prompt=prompt)
+    return TaskService.create_task(prompt=prompt, repository_url=repository_url)
+
+
+@pytest.fixture(autouse=True, scope="function")
+def mock_celery_task(mocker):
+    """Mock Celery task execution for all tests."""
+    mocker.patch("app.tasks.agent_execution.execute_agent_task.delay")
 
 
 @pytest.fixture(autouse=True, scope="function")

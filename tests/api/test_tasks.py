@@ -7,12 +7,16 @@ def test_create_task(test_client):
     """Test POST /v1/tasks endpoint."""
     response = test_client.post(
         "/v1/tasks",
-        json={"prompt": "Test task via API"},
+        json={
+            "prompt": "Test task via API",
+            "repository_url": "https://github.com/test/repo.git",
+        },
     )
 
     assert response.status_code == 201
     data = response.json()
     assert data["prompt"] == "Test task via API"
+    assert data["repository_url"] == "https://github.com/test/repo.git"
     assert data["status"] == "pending"
     assert data["result"] is None
     assert data["sandbox_id"] is None

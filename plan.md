@@ -6,31 +6,43 @@ A cloud-hosted agent service that executes AI-powered development tasks in isola
 **Key Features:**
 - **Natural language interface**: No predefined task types - just describe what you want
 - **Powered by Claude Code**: Full agent capabilities for any development task
-- **Secure sandboxing**: Each task runs in isolated environment (Novita/E2B)
-- **Simple API**: Submit prompt, get task ID, poll for results
-- **Flexible credentials**: Use your own Anthropic API key and GitHub token
+- **Secure sandboxing**: Each task runs in isolated Novita sandbox environment
+- **Async task processing**: Celery + Redis for reliable task queueing
+- **Simple API**: Submit prompt + repository URL, get task ID, poll for results
 
 **Example Use Cases:**
 ```bash
 # Fix a GitHub issue
 curl -X POST https://api.cloudagent.dev/v1/tasks \
-  -H "Authorization: Bearer ca_..." \
-  -d '{"prompt": "Fix https://github.com/myorg/myapp/issues/123"}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Fix https://github.com/myorg/myapp/issues/123",
+    "repository_url": "https://github.com/myorg/myapp.git"
+  }'
 
 # Review a PR
 curl -X POST https://api.cloudagent.dev/v1/tasks \
-  -H "Authorization: Bearer ca_..." \
-  -d '{"prompt": "Review this PR and add detailed comments: https://github.com/myorg/myapp/pull/456"}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Review this PR and add detailed comments: https://github.com/myorg/myapp/pull/456",
+    "repository_url": "https://github.com/myorg/myapp.git"
+  }'
 
 # Add tests to a repo
 curl -X POST https://api.cloudagent.dev/v1/tasks \
-  -H "Authorization: Bearer ca_..." \
-  -d '{"prompt": "Clone https://github.com/myorg/myapp and add comprehensive unit tests for the auth module"}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Add comprehensive unit tests for the auth module",
+    "repository_url": "https://github.com/myorg/myapp.git"
+  }'
 
 # Fix TypeScript errors
 curl -X POST https://api.cloudagent.dev/v1/tasks \
-  -H "Authorization: Bearer ca_..." \
-  -d '{"prompt": "Fix all TypeScript errors in https://github.com/myorg/myapp"}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Fix all TypeScript errors",
+    "repository_url": "https://github.com/myorg/myapp.git"
+  }'
 ```
 
 ## Tech Stack
@@ -42,7 +54,7 @@ curl -X POST https://api.cloudagent.dev/v1/tasks \
 - **Task Queue**: Celery
 - **Message Broker**: Redis
 - **Database**: PostgreSQL + SQLModel
-- **Sandbox**: Novita AI Sandbox (E2B-compatible, 30% cheaper)
+- **Sandbox**: Novita AI Sandbox (E2B-compatible API, 30% cheaper than E2B)
 - **Agent**: Claude Code SDK or Anthropic Agent SDK
 
 ### Deployment Options

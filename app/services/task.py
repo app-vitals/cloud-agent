@@ -18,13 +18,19 @@ class TaskService:
     """Service for task-related business logic."""
 
     @staticmethod
-    def create_task(prompt: str) -> Task:
-        """Create a new task."""
+    def create_task(prompt: str, repository_url: str) -> Task:
+        """Create a new task and queue it for execution."""
         with get_session() as session:
-            task = Task(prompt=prompt, status="pending")
+            task = Task(prompt=prompt, repository_url=repository_url, status="pending")
             session.add(task)
             session.commit()
             session.refresh(task)
+
+            # Queue task for execution
+            from app.tasks import execute_agent_task
+
+            execute_agent_task.delay(str(task.id))
+
             return task
 
     @staticmethod
@@ -61,7 +67,10 @@ class TaskService:
 
     @staticmethod
     def update_task_status(
-        task_id: UUID, status: str, result: str | None = None
+        task_id: UUID,
+        status: str,
+        result: str | None = None,
+        sandbox_id: str | None = None,
     ) -> Task:
         """Update task status and result."""
         with get_session() as session:
@@ -75,6 +84,8 @@ class TaskService:
             task.updated_at = datetime.now(UTC)
             if result is not None:
                 task.result = result
+            if sandbox_id is not None:
+                task.sandbox_id = sandbox_id
 
             session.add(task)
             session.commit()

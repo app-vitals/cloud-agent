@@ -19,6 +19,9 @@ class Settings(BaseModel):
     # Database
     database_url: str = os.getenv("DATABASE_URL", "postgresql://localhost/cloudagent")
 
+    # Celery
+    celery_broker_url: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379")
+
     # Sandbox
     novita_api_key: str | None = os.getenv("NOVITA_API_KEY")
 
