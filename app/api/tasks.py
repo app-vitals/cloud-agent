@@ -16,6 +16,7 @@ class TaskCreate(BaseModel):
     """Request model for creating a task."""
 
     prompt: str
+    repository_url: str
 
 
 class TaskResponse(BaseModel):
@@ -26,6 +27,7 @@ class TaskResponse(BaseModel):
     status: str
     result: str | None
     sandbox_id: str | None
+    repository_url: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -42,7 +44,9 @@ class TaskListResponse(BaseModel):
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(task_data: TaskCreate):
     """Create a new task."""
-    task = TaskService.create_task(prompt=task_data.prompt)
+    task = TaskService.create_task(
+        prompt=task_data.prompt, repository_url=task_data.repository_url
+    )
 
     return TaskResponse(
         id=str(task.id),
@@ -50,6 +54,7 @@ def create_task(task_data: TaskCreate):
         status=task.status,
         result=task.result,
         sandbox_id=task.sandbox_id,
+        repository_url=task.repository_url,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -72,6 +77,7 @@ def get_task(task_id: UUID):
         status=task.status,
         result=task.result,
         sandbox_id=task.sandbox_id,
+        repository_url=task.repository_url,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -89,6 +95,7 @@ def list_tasks(limit: int = 100, offset: int = 0):
             status=task.status,
             result=task.result,
             sandbox_id=task.sandbox_id,
+            repository_url=task.repository_url,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )

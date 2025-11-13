@@ -10,10 +10,12 @@ from tests.conftest import create_test_task
 def test_create_task():
     """Test creating a task."""
     prompt = "Test task for creation"
-    task = TaskService.create_task(prompt=prompt)
+    repository_url = "https://github.com/test/repo.git"
+    task = TaskService.create_task(prompt=prompt, repository_url=repository_url)
 
     assert task.id is not None
     assert task.prompt == prompt
+    assert task.repository_url == repository_url
     assert task.status == "pending"
     assert task.result is None
     assert task.sandbox_id is None
