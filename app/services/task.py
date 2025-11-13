@@ -150,14 +150,14 @@ class TaskService:
             )
             total = session.execute(count_statement).scalar()
 
-            # Get paginated results ordered by created_at asc
+            # Get paginated results ordered by created_at
             statement = (
                 select(TaskLog)
                 .where(TaskLog.task_id == task_id)
-                .order_by(TaskLog.created_at.asc())
+                .order_by(TaskLog.created_at.desc())
                 .offset(offset)
                 .limit(limit)
             )
             logs = session.execute(statement).scalars().all()
 
-            return list(logs), total
+            return list(logs), len(logs)
