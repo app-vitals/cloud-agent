@@ -24,9 +24,10 @@ Examples:
     python scripts/test_claude_github.py "Create a PR" --stream-json
 """
 
+import argparse
 import os
 import sys
-import argparse
+
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
 
@@ -70,9 +71,9 @@ def test_claude_github(prompt=None, verbose=False, stream_json=False):
             envs={
                 "ANTHROPIC_API_KEY": anthropic_key,
                 "GITHUB_TOKEN": github_token,
-            }
+            },
         )
-        print(f"✓ Sandbox created successfully!")
+        print("✓ Sandbox created successfully!")
         print(f"  Sandbox ID: {sandbox.sandbox_id}")
         print()
 
@@ -85,7 +86,9 @@ def test_claude_github(prompt=None, verbose=False, stream_json=False):
 
         # Clone the repo first
         print("Cloning repository...")
-        result = sandbox.commands.run("git clone https://github.com/app-vitals/cloud-agent.git /home/user/cloud-agent")
+        result = sandbox.commands.run(
+            "git clone https://github.com/app-vitals/cloud-agent.git /home/user/cloud-agent"
+        )
         if result.exit_code != 0:
             print(f"❌ Failed to clone repo: {result.stderr}")
             sys.exit(1)
@@ -144,6 +147,7 @@ def test_claude_github(prompt=None, verbose=False, stream_json=False):
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
@@ -165,24 +169,24 @@ Examples:
 
   # With streaming JSON output
   python scripts/test_claude_github.py "Create a PR" --stream-json
-        """
+        """,
     )
     parser.add_argument(
         "prompt",
         nargs="?",
         default=None,
-        help="Prompt to send to Claude Code (default: create a test PR)"
+        help="Prompt to send to Claude Code (default: create a test PR)",
     )
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Enable verbose output to see Claude's intermediate steps"
+        help="Enable verbose output to see Claude's intermediate steps",
     )
     parser.add_argument(
-        "--stream-json",
-        action="store_true",
-        help="Enable streaming JSON output format"
+        "--stream-json", action="store_true", help="Enable streaming JSON output format"
     )
 
     args = parser.parse_args()
-    test_claude_github(prompt=args.prompt, verbose=args.verbose, stream_json=args.stream_json)
+    test_claude_github(
+        prompt=args.prompt, verbose=args.verbose, stream_json=args.stream_json
+    )
