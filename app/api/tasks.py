@@ -3,9 +3,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
+from app.core.auth import verify_api_key
 from app.core.errors import NotFoundError
 from app.services import TaskService
 
@@ -62,7 +63,7 @@ class TaskLogListResponse(BaseModel):
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-def create_task(task_data: TaskCreate):
+def create_task(task_data: TaskCreate, api_key: str = Depends(verify_api_key)):
     """Create a new task."""
     task = TaskService.create_task(
         prompt=task_data.prompt, repository_url=task_data.repository_url
@@ -81,7 +82,7 @@ def create_task(task_data: TaskCreate):
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
-def get_task(task_id: UUID):
+def get_task(task_id: UUID, api_key: str = Depends(verify_api_key)):
     """Get a task by ID."""
     try:
         task = TaskService.get_task_by_id(task_id)
@@ -104,7 +105,7 @@ def get_task(task_id: UUID):
 
 
 @router.get("/tasks", response_model=TaskListResponse)
-def list_tasks(limit: int = 100, offset: int = 0):
+def list_tasks(limit: int = 100, offset: int = 0, api_key: str = Depends(verify_api_key)):
     """List all tasks with pagination."""
     tasks, total = TaskService.list_tasks(limit=limit, offset=offset)
 
@@ -131,7 +132,7 @@ def list_tasks(limit: int = 100, offset: int = 0):
 
 
 @router.get("/tasks/{task_id}/logs", response_model=TaskLogListResponse)
-def get_task_logs(task_id: UUID, limit: int = 100, offset: int = 0):
+def get_task_logs(task_id: UUID, limit: int = 100, offset: int = 0, api_key: str = Depends(verify_api_key)):
     """Get logs for a task with pagination."""
     try:
         # Verify task exists
