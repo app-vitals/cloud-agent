@@ -43,3 +43,6 @@ uv.lock
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Novita
+novita.toml

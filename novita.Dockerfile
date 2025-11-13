@@ -36,9 +36,11 @@ RUN mkdir -p /etc/apt/keyrings \
     && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv (fast Python package manager)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+# Install uv (fast Python package manager) - copy to /usr/local/bin for all users
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && cp /root/.local/bin/uv /usr/local/bin/uv \
+    && cp /root/.local/bin/uvx /usr/local/bin/uvx \
+    && chmod 755 /usr/local/bin/uv /usr/local/bin/uvx
 
 # Install Claude Code CLI globally
 # Note: This installs to /usr/local which should be accessible
