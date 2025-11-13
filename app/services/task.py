@@ -9,7 +9,7 @@ from sqlmodel import select
 
 from app.core.database import get_session
 from app.core.errors import NotFoundError
-from app.models import Task
+from app.models import Task, TaskLog
 
 logger = logging.getLogger(__name__)
 
@@ -91,3 +91,73 @@ class TaskService:
             session.commit()
             session.refresh(task)
             return task
+
+    @staticmethod
+    def store_task_logs(task_id: UUID, stdout: str, stderr: str) -> None:
+        """Store task execution logs.
+
+        Args:
+            task_id: UUID of the task
+            stdout: stdout content from Claude Code (JSON lines)
+            stderr: stderr content from Claude Code
+        """
+        with get_session() as session:
+            # Store stdout lines as separate log entries
+            if stdout:
+                for line in stdout.strip().split("\n"):
+                    if line.strip():
+                        log = TaskLog(
+                            task_id=task_id,
+                            stream="stdout",
+                            format="json",
+                            content=line,
+                        )
+                        session.add(log)
+
+            # Store stderr as a single entry
+            if stderr:
+                log = TaskLog(
+                    task_id=task_id,
+                    stream="stderr",
+                    format="text",
+                    content=stderr,
+                )
+                session.add(log)
+
+            session.commit()
+            logger.info(f"Stored logs for task {task_id}")
+
+    @staticmethod
+    def get_task_logs(
+        task_id: UUID, limit: int = 100, offset: int = 0
+    ) -> tuple[list[TaskLog], int]:
+        """Get logs for a task with pagination.
+
+        Args:
+            task_id: UUID of the task
+            limit: Maximum number of logs to return
+            offset: Number of logs to skip
+
+        Returns:
+            Tuple of (logs, total_count)
+        """
+        with get_session() as session:
+            # Get total count
+            count_statement = (
+                select(func.count())
+                .select_from(TaskLog)
+                .where(TaskLog.task_id == task_id)
+            )
+            total = session.execute(count_statement).scalar()
+
+            # Get paginated results ordered by created_at asc
+            statement = (
+                select(TaskLog)
+                .where(TaskLog.task_id == task_id)
+                .order_by(TaskLog.created_at.asc())
+                .offset(offset)
+                .limit(limit)
+            )
+            logs = session.execute(statement).scalars().all()
+
+            return list(logs), total

@@ -57,13 +57,16 @@ class AgentExecutionService:
                 sandbox, task.prompt
             )
 
+            # Store logs from execution
+            TaskService.store_task_logs(task_id, stdout, stderr)
+
             # Determine final status
             if exit_code == 0:
                 status = "completed"
-                result = stdout
+                result = "Task completed successfully"
             else:
                 status = "failed"
-                result = f"Exit code {exit_code}:\n{stderr}\n{stdout}"
+                result = f"Task failed with exit code {exit_code}"
 
             # Update task with final status
             TaskService.update_task_status(task_id, status, result=result)

@@ -29,5 +29,9 @@ class Settings(BaseModel):
     system_anthropic_api_key: str | None = os.getenv("SYSTEM_ANTHROPIC_API_KEY")
     system_github_token: str | None = os.getenv("SYSTEM_GITHUB_TOKEN")
 
+    # Timeouts (in seconds)
+    sandbox_timeout: int = int(os.getenv("SANDBOX_TIMEOUT", "600"))  # 10 minutes
+    claude_code_timeout: int = int(os.getenv("CLAUDE_CODE_TIMEOUT", "300"))  # 5 minutes
+
 
 settings = Settings()

@@ -107,3 +107,56 @@ def test_update_task_status_not_found():
         TaskService.update_task_status(non_existent_id, status="completed")
 
     assert f"Task with id {non_existent_id} not found" in str(exc_info.value)
+
+
+def test_store_task_logs():
+    """Test storing task logs."""
+    task = create_test_task(prompt="Task with logs")
+
+    stdout = '{"type":"system","subtype":"init"}\n{"type":"assistant","message":"test"}'
+    stderr = "Some error output"
+
+    TaskService.store_task_logs(task.id, stdout, stderr)
+
+    logs, total = TaskService.get_task_logs(task.id)
+
+    assert total == 3  # 2 stdout lines + 1 stderr
+    assert logs[0].stream == "stdout"
+    assert logs[0].format == "json"
+    assert logs[1].stream == "stdout"
+    assert logs[1].format == "json"
+    assert logs[2].stream == "stderr"
+    assert logs[2].format == "text"
+    assert logs[2].content == stderr
+
+
+def test_get_task_logs_pagination():
+    """Test getting task logs with pagination."""
+    task = create_test_task(prompt="Task with many logs")
+
+    # Create multiple log lines
+    stdout = "\n".join([f'{{"line":{i}}}' for i in range(10)])
+    TaskService.store_task_logs(task.id, stdout, "")
+
+    # Get first page
+    logs_page1, total = TaskService.get_task_logs(task.id, limit=5, offset=0)
+    assert len(logs_page1) == 5
+    assert total == 10
+
+    # Get second page
+    logs_page2, total = TaskService.get_task_logs(task.id, limit=5, offset=5)
+    assert len(logs_page2) == 5
+    assert total == 10
+
+    # Ensure pages are different
+    assert logs_page1[0].id != logs_page2[0].id
+
+
+def test_get_task_logs_empty():
+    """Test getting logs for task with no logs."""
+    task = create_test_task(prompt="Task without logs")
+
+    logs, total = TaskService.get_task_logs(task.id)
+
+    assert total == 0
+    assert len(logs) == 0

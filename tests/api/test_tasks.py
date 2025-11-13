@@ -1,5 +1,6 @@
 """Tests for task API endpoints."""
 
+from app.services import TaskService
 from tests.conftest import create_test_task
 
 
@@ -114,3 +115,77 @@ def test_health_check(test_client):
 
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
+
+
+def test_get_task_logs(test_client):
+    """Test GET /v1/tasks/{task_id}/logs endpoint."""
+    task = create_test_task(prompt="Task with logs")
+
+    # Store some logs
+    stdout = '{"type":"system","subtype":"init"}\n{"type":"assistant","message":"test"}'
+    stderr = "Some error"
+    TaskService.store_task_logs(task.id, stdout, stderr)
+
+    response = test_client.get(f"/v1/tasks/{task.id}/logs")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 3  # 2 stdout + 1 stderr
+    assert len(data["logs"]) == 3
+    assert data["limit"] == 100
+    assert data["offset"] == 0
+
+    # Check first log
+    assert data["logs"][0]["task_id"] == str(task.id)
+    assert data["logs"][0]["stream"] == "stdout"
+    assert data["logs"][0]["format"] == "json"
+    assert "id" in data["logs"][0]
+    assert "created_at" in data["logs"][0]
+
+
+def test_get_task_logs_pagination(test_client):
+    """Test GET /v1/tasks/{task_id}/logs with pagination."""
+    task = create_test_task(prompt="Task with many logs")
+
+    # Create multiple log lines
+    stdout = "\n".join([f'{{"line":{i}}}' for i in range(10)])
+    TaskService.store_task_logs(task.id, stdout, "")
+
+    # Get first page
+    response = test_client.get(f"/v1/tasks/{task.id}/logs?limit=5&offset=0")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["logs"]) == 5
+    assert data["total"] == 10
+    assert data["limit"] == 5
+    assert data["offset"] == 0
+
+    # Get second page
+    response = test_client.get(f"/v1/tasks/{task.id}/logs?limit=5&offset=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["logs"]) == 5
+    assert data["total"] == 10
+
+
+def test_get_task_logs_not_found(test_client):
+    """Test GET /v1/tasks/{task_id}/logs with non-existent task."""
+    from uuid import uuid4
+
+    non_existent_id = uuid4()
+    response = test_client.get(f"/v1/tasks/{non_existent_id}/logs")
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+def test_get_task_logs_empty(test_client):
+    """Test GET /v1/tasks/{task_id}/logs with no logs."""
+    task = create_test_task(prompt="Task without logs")
+
+    response = test_client.get(f"/v1/tasks/{task.id}/logs")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0
+    assert len(data["logs"]) == 0
