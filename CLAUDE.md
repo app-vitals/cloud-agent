@@ -69,6 +69,10 @@ uv run celery -A app.celery_app worker --loglevel=info --queues=agent_execution
 
 ### Testing
 ```bash
+# Set up test database (run once, or when you need to reset)
+./scripts/setup_test_db.sh
+uv run alembic upgrade head
+
 # Run all tests with coverage (must meet 90% threshold)
 uv run pytest tests/ -v --cov=app --cov-report=term-missing
 
@@ -81,6 +85,8 @@ uv run pytest tests/services/test_agent_execution.py::test_execute_task_success 
 # Run integration test (requires API and Celery worker running)
 uv run python scripts/integration_test.py
 ```
+
+**Note for Novita Sandboxes**: The default `DATABASE_URL` is configured to use `postgresql://postgres@localhost/cloudagent` which works with the trust authentication set up by `start-services.sh`. Make sure to run the database setup script before running tests.
 
 ### Code Quality
 ```bash
