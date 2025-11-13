@@ -32,7 +32,7 @@ def main():
     # Create a test task
     print("2. Creating a test task...")
     task_data = {
-        "prompt": "Analyze the repository structure and create a new file called ANALYSIS.md that documents the main components, their purposes, and how they interact. Include a diagram if possible.",
+        "prompt": "Create a file called hello.txt with the text 'Hello \"World\"!'",
         "repository_url": "https://github.com/anthropics/anthropic-sdk-python.git",
     }
 

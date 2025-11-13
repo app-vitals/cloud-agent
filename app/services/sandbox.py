@@ -91,20 +91,26 @@ class SandboxService:
         if timeout is None:
             timeout = settings.claude_code_timeout
 
-        # Escape double quotes for shell (using same approach as verify_claude_github.py)
-        escaped_prompt = prompt.replace('"', '\\"')
+        # Escape for bash -c with double quotes:
+        # Need to escape: double quotes, dollar signs, backticks, and backslashes
+        # Single quotes are safe inside double quotes and don't need escaping
+        escaped_prompt = (
+            prompt.replace("\\", "\\\\")  # Escape backslashes first
+            .replace('"', '\\"')  # Escape double quotes
+            .replace("$", "\\$")  # Escape dollar signs
+            .replace("`", "\\`")  # Escape backticks
+        )
 
         # Build Claude command with timeout
         # -p/--print: non-interactive mode (skips workspace trust dialog)
         # --dangerously-skip-permissions: bypass all permission checks (safe in sandbox)
         # --verbose --output-format stream-json: get structured output with logs
         # timeout command: kills process after specified seconds, sends SIGTERM then SIGKILL
+        # Using bash -c with double quotes to avoid complex single quote escaping
         claude_command = (
             f"cd /home/user/repo && "
-            f"timeout {timeout} sh -c '"
-            f'echo "{escaped_prompt}" | '
-            f"claude -p --dangerously-skip-permissions --verbose --output-format stream-json"
-            f"'"
+            f'timeout {timeout} bash -c "echo \\"{escaped_prompt}\\" | '
+            f'claude -p --dangerously-skip-permissions --verbose --output-format stream-json"'
         )
 
         logger.info(
