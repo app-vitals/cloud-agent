@@ -47,6 +47,17 @@ class SandboxService:
         logger.info(
             f"Created sandbox {sandbox.sandbox_id} with {settings.sandbox_timeout}s timeout"
         )
+
+        # Start PostgreSQL and Redis services
+        logger.info("Starting PostgreSQL and Redis services...")
+        result = sandbox.commands.run("start-services", timeout=30)
+        if result.exit_code == 0:
+            logger.info("Services started successfully")
+        else:
+            logger.warning(
+                f"Failed to start services (exit {result.exit_code}): {result.stderr}"
+            )
+
         return sandbox
 
     @staticmethod
