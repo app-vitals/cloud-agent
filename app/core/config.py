@@ -17,9 +17,9 @@ class Settings(BaseModel):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     # Database
-    # Default uses postgres user with trust auth (configured in Novita sandbox via start-services.sh)
+    # Default uses local socket connection with trust auth (no password needed in sandboxes)
     database_url: str = os.getenv(
-        "DATABASE_URL", "postgresql://postgres@localhost/cloudagent"
+        "DATABASE_URL", "postgresql:///cloudagent?user=postgres"
     )
 
     # Celery

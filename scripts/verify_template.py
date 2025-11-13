@@ -106,6 +106,52 @@ def test_template():
         else:
             print("⚠️  start-services script not found")
 
+        # Test PostgreSQL connectivity
+        print("\n" + "=" * 60)
+        print("Testing PostgreSQL Database Connectivity")
+        print("=" * 60)
+
+        print("\n1. Testing local socket connection (psql -U postgres)...")
+        result = sandbox.commands.run(
+            'psql -U postgres -c "SELECT version();"', timeout=5
+        )
+        if result.exit_code == 0:
+            print("✓ Connected via local socket")
+        else:
+            print(f"✗ Failed (exit {result.exit_code}): {result.stderr[:150]}")
+
+        print("\n2. Creating cloudagent database...")
+        result = sandbox.commands.run(
+            'psql -U postgres -c "CREATE DATABASE cloudagent;"', timeout=5
+        )
+        if result.exit_code == 0:
+            print("✓ Database created")
+        else:
+            print(f"✗ Failed (exit {result.exit_code}): {result.stderr[:150]}")
+
+        print("\n3. Connecting to cloudagent database...")
+        result = sandbox.commands.run(
+            'psql -U postgres cloudagent -c "SELECT current_database();"', timeout=5
+        )
+        if result.exit_code == 0:
+            print("✓ Connected to cloudagent database")
+        else:
+            print(f"✗ Failed (exit {result.exit_code}): {result.stderr[:150]}")
+
+        print(
+            "\n4. Testing DATABASE_URL format (local socket): postgresql:///cloudagent?user=postgres..."
+        )
+        result = sandbox.commands.run(
+            'psql "postgresql:///cloudagent?user=postgres" -c "SELECT 1 AS test;"',
+            timeout=5,
+        )
+        if result.exit_code == 0:
+            print("✓ Local socket DATABASE_URL format works!")
+        else:
+            print(f"✗ Failed (exit {result.exit_code})")
+            if result.stderr:
+                print(f"Stderr: {result.stderr[:150]}")
+
         # Cleanup
         print("\n🧹 Cleaning up...")
         sandbox.kill()
