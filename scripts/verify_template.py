@@ -8,10 +8,12 @@ Usage:
 
 import os
 import sys
+
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
 
 load_dotenv()
+
 
 def test_template():
     """Test the cloud-agent-v1 template."""
@@ -37,7 +39,7 @@ def test_template():
     try:
         # Try to create sandbox from template
         sandbox = Sandbox.create(template=template_name)
-        print(f"✓ Sandbox created successfully!")
+        print("✓ Sandbox created successfully!")
         print(f"  Sandbox ID: {sandbox.sandbox_id}")
         print()
 
@@ -51,7 +53,7 @@ def test_template():
             if result2.exit_code == 0:
                 print(f"  Binary location: {result2.stdout.strip()}")
         else:
-            print(f"⚠️  Claude Code not found")
+            print("⚠️  Claude Code not found")
             print(f"   Exit code: {result.exit_code}")
 
         # Test if gh CLI is pre-installed
@@ -60,7 +62,7 @@ def test_template():
         if result.exit_code == 0:
             print(f"✓ gh CLI found at: {result.stdout.strip()}")
         else:
-            print(f"⚠️  gh CLI not found")
+            print("⚠️  gh CLI not found")
 
         # Test if uv is pre-installed
         print("\nTesting if uv is pre-installed...")
@@ -68,7 +70,7 @@ def test_template():
         if result.exit_code == 0:
             print(f"✓ uv installed: {result.stdout.strip()}")
         else:
-            print(f"⚠️  uv not found")
+            print("⚠️  uv not found")
 
         # Test if PostgreSQL is pre-installed
         print("\nTesting if PostgreSQL is pre-installed...")
@@ -76,7 +78,7 @@ def test_template():
         if result.exit_code == 0:
             print(f"✓ PostgreSQL installed: {result.stdout.strip()}")
         else:
-            print(f"⚠️  PostgreSQL not found")
+            print("⚠️  PostgreSQL not found")
 
         # Test if Redis is pre-installed
         print("\nTesting if Redis is pre-installed...")
@@ -84,7 +86,7 @@ def test_template():
         if result.exit_code == 0:
             print(f"✓ Redis installed: {result.stdout.strip()}")
         else:
-            print(f"⚠️  Redis not found")
+            print("⚠️  Redis not found")
 
         # Test if services can be started
         print("\nTesting if start-services script is available...")
@@ -97,12 +99,12 @@ def test_template():
                 print("✓ Services started successfully")
                 print(result.stdout)
             else:
-                print(f"⚠️  Failed to start services")
+                print("⚠️  Failed to start services")
                 print(f"   Exit code: {result.exit_code}")
                 if result.stderr:
                     print(f"   Error: {result.stderr}")
         else:
-            print(f"⚠️  start-services script not found")
+            print("⚠️  start-services script not found")
 
         # Cleanup
         print("\n🧹 Cleaning up...")
@@ -122,8 +124,10 @@ def test_template():
             print("   You can check status in Novita dashboard:")
             print("   https://novita.ai/dashboard")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
+
 
 if __name__ == "__main__":
     test_template()
