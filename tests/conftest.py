@@ -50,3 +50,9 @@ def test_client():
     """Create a test client."""
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture(scope="function")
+def auth_headers():
+    """Provide authentication headers for API requests."""
+    return {"X-API-Key": "dev-secret-key"}
