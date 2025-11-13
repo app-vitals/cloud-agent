@@ -1,6 +1,7 @@
 """Task API endpoints."""
 
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -55,7 +56,7 @@ def create_task(task_data: TaskCreate):
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
-def get_task(task_id: str):
+def get_task(task_id: UUID):
     """Get a task by ID."""
     try:
         task = TaskService.get_task_by_id(task_id)

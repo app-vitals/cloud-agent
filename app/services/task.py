@@ -28,11 +28,8 @@ class TaskService:
             return task
 
     @staticmethod
-    def get_task_by_id(task_id: str | UUID) -> Task:
+    def get_task_by_id(task_id: UUID) -> Task:
         """Get task by ID."""
-        if isinstance(task_id, str):
-            task_id = UUID(task_id)
-
         with get_session() as session:
             statement = select(Task).where(Task.id == task_id)
             result = session.execute(statement)
@@ -64,12 +61,9 @@ class TaskService:
 
     @staticmethod
     def update_task_status(
-        task_id: str | UUID, status: str, result: str | None = None
+        task_id: UUID, status: str, result: str | None = None
     ) -> Task:
         """Update task status and result."""
-        if isinstance(task_id, str):
-            task_id = UUID(task_id)
-
         with get_session() as session:
             statement = select(Task).where(Task.id == task_id)
             task = session.execute(statement).scalar_one_or_none()
