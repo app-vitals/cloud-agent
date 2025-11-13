@@ -24,10 +24,10 @@ class TaskResponse(BaseModel):
 
     id: str
     prompt: str
+    repository_url: str
     status: str
     result: str | None
     sandbox_id: str | None
-    repository_url: str | None
     created_at: datetime
     updated_at: datetime
 

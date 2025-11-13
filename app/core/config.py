@@ -24,7 +24,6 @@ class Settings(BaseModel):
 
     # Sandbox
     novita_api_key: str | None = os.getenv("NOVITA_API_KEY")
-    e2b_api_key: str | None = os.getenv("E2B_API_KEY")
 
     # Claude
     system_anthropic_api_key: str | None = os.getenv("SYSTEM_ANTHROPIC_API_KEY")
