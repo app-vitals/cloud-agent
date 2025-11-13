@@ -105,7 +105,9 @@ def get_task(task_id: UUID, api_key: str = Depends(verify_api_key)):
 
 
 @router.get("/tasks", response_model=TaskListResponse)
-def list_tasks(limit: int = 100, offset: int = 0, api_key: str = Depends(verify_api_key)):
+def list_tasks(
+    limit: int = 100, offset: int = 0, api_key: str = Depends(verify_api_key)
+):
     """List all tasks with pagination."""
     tasks, total = TaskService.list_tasks(limit=limit, offset=offset)
 
@@ -132,7 +134,12 @@ def list_tasks(limit: int = 100, offset: int = 0, api_key: str = Depends(verify_
 
 
 @router.get("/tasks/{task_id}/logs", response_model=TaskLogListResponse)
-def get_task_logs(task_id: UUID, limit: int = 100, offset: int = 0, api_key: str = Depends(verify_api_key)):
+def get_task_logs(
+    task_id: UUID,
+    limit: int = 100,
+    offset: int = 0,
+    api_key: str = Depends(verify_api_key),
+):
     """Get logs for a task with pagination."""
     try:
         # Verify task exists

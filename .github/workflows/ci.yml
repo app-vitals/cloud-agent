@@ -66,5 +66,4 @@ jobs:
         env:
           APP_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cloudagent
-          API_SECRET_KEY: test-secret-key
           LOG_LEVEL: INFO
