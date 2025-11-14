@@ -47,3 +47,7 @@ class Task(SQLModel, table=True):
     repository_url: str = Field(
         description="GitHub repository URL to clone and work on"
     )
+    encrypted_api_keys: str | None = Field(
+        default=None,
+        description="Encrypted JSON string containing API keys for the task",
+    )
