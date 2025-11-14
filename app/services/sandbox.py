@@ -18,6 +18,7 @@ class SandboxService:
     def create_sandbox(
         repository_url: str,
         anthropic_api_key: str | None = None,
+        claude_code_oauth_token: str | None = None,
         github_token: str | None = None,
     ) -> Sandbox:
         """Create a new Novita sandbox with environment variables."""
@@ -27,21 +28,28 @@ class SandboxService:
 
         # Use system keys as fallback
         final_anthropic_key = anthropic_api_key or settings.system_anthropic_api_key
+        final_claude_code_oauth_token = claude_code_oauth_token or settings.system_claude_code_oauth_token
         final_github_token = github_token or settings.system_github_token
 
-        if not final_anthropic_key:
-            raise ValueError("ANTHROPIC_API_KEY is required")
+        if not final_anthropic_key and not final_claude_code_oauth_token:
+            raise ValueError("Either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN is required")
         if not final_github_token:
             raise ValueError("GITHUB_TOKEN is required")
 
         # Create sandbox with environment variables and timeout
+        # Only include non-None environment variables
+        envs = {}
+        if final_anthropic_key is not None:
+            envs["ANTHROPIC_API_KEY"] = final_anthropic_key
+        if final_claude_code_oauth_token is not None:
+            envs["CLAUDE_CODE_OAUTH_TOKEN"] = final_claude_code_oauth_token
+        if final_github_token is not None:
+            envs["GITHUB_TOKEN"] = final_github_token
+
         sandbox = Sandbox.create(
             template="cloud-agent-v1",
             timeout=settings.sandbox_timeout,
-            envs={
-                "ANTHROPIC_API_KEY": final_anthropic_key,
-                "GITHUB_TOKEN": final_github_token,
-            },
+            envs=envs,
         )
 
         logger.info(
