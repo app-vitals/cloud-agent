@@ -1,7 +1,12 @@
 """Tests for TaskService."""
 
-import pytest
+import json
 
+import pytest
+from cryptography.fernet import Fernet
+
+from app.core.config import settings
+from app.core.encryption import decrypt_data
 from app.core.errors import NotFoundError
 from app.services import TaskService
 from tests.conftest import create_test_task
@@ -160,3 +165,136 @@ def test_get_task_logs_empty():
 
     assert total == 0
     assert len(logs) == 0
+
+
+def test_create_task_with_api_keys(mocker):
+    """Test creating a task with API keys encrypts them."""
+    # Mock the encryption key
+    encryption_key = Fernet.generate_key().decode()
+    mocker.patch.object(settings, "encryption_key", encryption_key)
+
+    prompt = "Test task with API keys"
+    repository_url = "https://github.com/test/repo.git"
+    api_keys = {
+        "ANTHROPIC_API_KEY": "sk-ant-test123",
+        "GITHUB_TOKEN": "ghp_test456",
+    }
+
+    task = TaskService.create_task(
+        prompt=prompt, repository_url=repository_url, api_keys=api_keys
+    )
+
+    # Verify task was created
+    assert task.id is not None
+    assert task.prompt == prompt
+    assert task.repository_url == repository_url
+    assert task.status == "pending"
+
+    # Verify API keys were encrypted and stored
+    assert task.encrypted_api_keys is not None
+    assert task.encrypted_api_keys != json.dumps(api_keys)
+
+    # Verify encrypted data can be decrypted back to original
+    decrypted_json = decrypt_data(task.encrypted_api_keys, encryption_key)
+    decrypted_keys = json.loads(decrypted_json)
+    assert decrypted_keys == api_keys
+
+
+def test_create_task_without_api_keys():
+    """Test creating a task without API keys."""
+    prompt = "Test task without API keys"
+    repository_url = "https://github.com/test/repo.git"
+
+    task = TaskService.create_task(prompt=prompt, repository_url=repository_url)
+
+    # Verify task was created without encrypted keys
+    assert task.id is not None
+    assert task.encrypted_api_keys is None
+
+
+def test_create_task_with_api_keys_no_encryption_key(mocker):
+    """Test creating a task with API keys when encryption key is not set."""
+    # Mock no encryption key
+    mocker.patch.object(settings, "encryption_key", None)
+
+    prompt = "Test task"
+    repository_url = "https://github.com/test/repo.git"
+    api_keys = {"ANTHROPIC_API_KEY": "sk-ant-test123"}
+
+    task = TaskService.create_task(
+        prompt=prompt, repository_url=repository_url, api_keys=api_keys
+    )
+
+    # Verify task was created but API keys were not encrypted
+    assert task.id is not None
+    assert task.encrypted_api_keys is None
+
+
+def test_create_task_api_keys_not_exposed_in_response(mocker):
+    """Test that raw API keys are not stored in task object."""
+    # Mock the encryption key
+    encryption_key = Fernet.generate_key().decode()
+    mocker.patch.object(settings, "encryption_key", encryption_key)
+
+    api_keys = {
+        "ANTHROPIC_API_KEY": "sk-ant-secret-key",
+        "GITHUB_TOKEN": "ghp_secret_token",
+    }
+
+    task = TaskService.create_task(
+        prompt="Test", repository_url="https://github.com/test/repo.git", api_keys=api_keys
+    )
+
+    # Verify raw API keys are not in any task field
+    # Convert UUID to string for JSON serialization
+    task_dict = task.model_dump()
+    task_dict["id"] = str(task_dict["id"])
+    task_dict["created_at"] = task_dict["created_at"].isoformat()
+    task_dict["updated_at"] = task_dict["updated_at"].isoformat()
+    task_json = json.dumps(task_dict)
+
+    assert "sk-ant-secret-key" not in task_json
+    assert "ghp_secret_token" not in task_json
+    assert task.encrypted_api_keys is not None
+
+
+def test_create_task_with_empty_api_keys_dict(mocker):
+    """Test creating a task with empty API keys dictionary."""
+    encryption_key = Fernet.generate_key().decode()
+    mocker.patch.object(settings, "encryption_key", encryption_key)
+
+    task = TaskService.create_task(
+        prompt="Test",
+        repository_url="https://github.com/test/repo.git",
+        api_keys={},
+    )
+
+    # Empty dict is falsy in Python, so it won't be encrypted
+    # The condition `if api_keys and settings.encryption_key:` evaluates to False
+    assert task.encrypted_api_keys is None
+
+
+def test_create_task_with_multiple_api_keys(mocker):
+    """Test creating a task with multiple API keys."""
+    encryption_key = Fernet.generate_key().decode()
+    mocker.patch.object(settings, "encryption_key", encryption_key)
+
+    api_keys = {
+        "ANTHROPIC_API_KEY": "sk-ant-key1",
+        "GITHUB_TOKEN": "ghp_token1",
+        "OPENAI_API_KEY": "sk-openai-key1",
+        "CUSTOM_API_KEY": "custom-key-123",
+    }
+
+    task = TaskService.create_task(
+        prompt="Test",
+        repository_url="https://github.com/test/repo.git",
+        api_keys=api_keys,
+    )
+
+    # Verify all keys were encrypted and can be decrypted
+    assert task.encrypted_api_keys is not None
+    decrypted_json = decrypt_data(task.encrypted_api_keys, encryption_key)
+    decrypted_keys = json.loads(decrypted_json)
+    assert len(decrypted_keys) == 4
+    assert decrypted_keys == api_keys
