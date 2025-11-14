@@ -17,31 +17,54 @@ class SandboxService:
     @staticmethod
     def create_sandbox(
         repository_url: str,
-        anthropic_api_key: str | None = None,
-        github_token: str | None = None,
+        api_keys: dict[str, str] | None = None,
     ) -> Sandbox:
-        """Create a new Novita sandbox with environment variables."""
+        """Create a new Novita sandbox with environment variables.
+
+        Args:
+            repository_url: Git repository URL (unused in sandbox creation but kept for clarity)
+            api_keys: Optional dictionary of API keys to pass to sandbox.
+                     Supported keys: anthropic_api_key, github_token
+
+        Returns:
+            Configured Sandbox instance
+        """
         # Configure for Novita
         os.environ["E2B_API_KEY"] = settings.novita_api_key or ""
         os.environ["E2B_DOMAIN"] = "sandbox.novita.ai"
 
-        # Use system keys as fallback
-        final_anthropic_key = anthropic_api_key or settings.system_anthropic_api_key
-        final_github_token = github_token or settings.system_github_token
+        # Extract API keys from dictionary or use system defaults
+        api_keys = api_keys or {}
+        final_anthropic_key = api_keys.get(
+            "anthropic_api_key"
+        ) or settings.system_anthropic_api_key
+        final_github_token = api_keys.get(
+            "github_token"
+        ) or settings.system_github_token
 
         if not final_anthropic_key:
             raise ValueError("ANTHROPIC_API_KEY is required")
         if not final_github_token:
             raise ValueError("GITHUB_TOKEN is required")
 
+        # Build environment variables for sandbox
+        sandbox_envs = {
+            "ANTHROPIC_API_KEY": final_anthropic_key,
+            "GITHUB_TOKEN": final_github_token,
+        }
+
+        # Add any additional API keys that aren't anthropic_api_key or github_token
+        for key, value in api_keys.items():
+            if key not in ("anthropic_api_key", "github_token") and value:
+                # Convert snake_case to SCREAMING_SNAKE_CASE
+                env_key = key.upper()
+                sandbox_envs[env_key] = value
+
         # Create sandbox with environment variables and timeout
         sandbox = Sandbox.create(
             template="cloud-agent-v1",
             timeout=settings.sandbox_timeout,
-            envs={
-                "ANTHROPIC_API_KEY": final_anthropic_key,
-                "GITHUB_TOKEN": final_github_token,
-            },
+            envs=sandbox_envs,
         )
 
         logger.info(

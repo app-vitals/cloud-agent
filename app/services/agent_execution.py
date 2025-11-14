@@ -1,8 +1,11 @@
 """Agent execution service with business logic."""
 
+import json
 import logging
 from uuid import UUID
 
+from app.core.config import settings
+from app.core.encryption import decrypt_data
 from app.services.sandbox import SandboxService
 from app.services.task import TaskService
 
@@ -31,9 +34,24 @@ class AgentExecutionService:
         # Update status to running
         TaskService.update_task_status(task_id, "running")
 
+        # Decrypt API keys if present
+        api_keys = None
+        if task.encrypted_api_keys and settings.encryption_key:
+            try:
+                decrypted_json = decrypt_data(
+                    task.encrypted_api_keys, settings.encryption_key
+                )
+                api_keys = json.loads(decrypted_json)
+                logger.info(f"Decrypted {len(api_keys)} API keys for task {task_id}")
+            except Exception as e:
+                logger.error(f"Failed to decrypt API keys: {e}")
+                # Continue without custom keys, will use system defaults
+
         # Create sandbox
         logger.info(f"Creating sandbox for task {task_id}")
-        sandbox = SandboxService.create_sandbox(repository_url=task.repository_url)
+        sandbox = SandboxService.create_sandbox(
+            repository_url=task.repository_url, api_keys=api_keys
+        )
 
         try:
             # Update task with sandbox ID
