@@ -43,8 +43,10 @@ class AgentExecutionService:
                 )
                 api_keys = json.loads(decrypted_json)
                 logger.info(f"Decrypted {len(api_keys)} API keys for task {task_id}")
-            except Exception as e:
-                logger.error(f"Failed to decrypt API keys: {e}")
+            except Exception:
+                logger.error(
+                    f"Failed to decrypt API keys for task {task_id}, using system defaults"
+                )
                 # Continue without custom keys, will use system defaults
 
         # Create sandbox

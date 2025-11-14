@@ -60,7 +60,7 @@ def test_encrypt_data_invalid_key():
     """Test encryption with invalid key raises exception."""
     invalid_key = "not-a-valid-fernet-key"
 
-    with pytest.raises(Exception):  # Fernet raises ValueError for invalid key format
+    with pytest.raises(ValueError):  # Fernet raises ValueError for invalid key format
         encrypt_data("some data", invalid_key)
 
 
@@ -68,7 +68,7 @@ def test_decrypt_data_invalid_key():
     """Test decryption with invalid key raises exception."""
     invalid_key = "not-a-valid-fernet-key"
 
-    with pytest.raises(Exception):  # Fernet raises ValueError for invalid key format
+    with pytest.raises(ValueError):  # Fernet raises ValueError for invalid key format
         decrypt_data("some encrypted data", invalid_key)
 
 

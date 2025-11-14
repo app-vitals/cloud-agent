@@ -35,12 +35,12 @@ class SandboxService:
 
         # Extract API keys from dictionary or use system defaults
         api_keys = api_keys or {}
-        final_anthropic_key = api_keys.get(
-            "anthropic_api_key"
-        ) or settings.system_anthropic_api_key
-        final_github_token = api_keys.get(
-            "github_token"
-        ) or settings.system_github_token
+        final_anthropic_key = (
+            api_keys.get("anthropic_api_key") or settings.system_anthropic_api_key
+        )
+        final_github_token = (
+            api_keys.get("github_token") or settings.system_github_token
+        )
 
         if not final_anthropic_key:
             raise ValueError("ANTHROPIC_API_KEY is required")

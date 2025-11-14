@@ -242,7 +242,9 @@ def test_create_task_api_keys_not_exposed_in_response(mocker):
     }
 
     task = TaskService.create_task(
-        prompt="Test", repository_url="https://github.com/test/repo.git", api_keys=api_keys
+        prompt="Test",
+        repository_url="https://github.com/test/repo.git",
+        api_keys=api_keys,
     )
 
     # Verify raw API keys are not in any task field
