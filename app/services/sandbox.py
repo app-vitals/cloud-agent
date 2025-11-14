@@ -28,11 +28,15 @@ class SandboxService:
 
         # Use system keys as fallback
         final_anthropic_key = anthropic_api_key or settings.system_anthropic_api_key
-        final_claude_code_oauth_token = claude_code_oauth_token or settings.system_claude_code_oauth_token
+        final_claude_code_oauth_token = (
+            claude_code_oauth_token or settings.system_claude_code_oauth_token
+        )
         final_github_token = github_token or settings.system_github_token
 
         if not final_anthropic_key and not final_claude_code_oauth_token:
-            raise ValueError("Either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN is required")
+            raise ValueError(
+                "Either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN is required"
+            )
         if not final_github_token:
             raise ValueError("GITHUB_TOKEN is required")
 

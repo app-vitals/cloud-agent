@@ -30,7 +30,9 @@ class Settings(BaseModel):
 
     # Claude
     system_anthropic_api_key: str | None = os.getenv("SYSTEM_ANTHROPIC_API_KEY")
-    system_claude_code_oauth_token: str | None = os.getenv("SYSTEM_CLAUDE_CODE_OAUTH_TOKEN")
+    system_claude_code_oauth_token: str | None = os.getenv(
+        "SYSTEM_CLAUDE_CODE_OAUTH_TOKEN"
+    )
     system_github_token: str | None = os.getenv("SYSTEM_GITHUB_TOKEN")
 
     # Timeouts (in seconds)
