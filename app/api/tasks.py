@@ -18,6 +18,7 @@ class TaskCreate(BaseModel):
 
     prompt: str
     repository_url: str
+    api_keys: dict[str, str] | None = None
 
 
 class TaskResponse(BaseModel):
@@ -66,7 +67,9 @@ class TaskLogListResponse(BaseModel):
 def create_task(task_data: TaskCreate, api_key: str = Depends(verify_api_key)):
     """Create a new task."""
     task = TaskService.create_task(
-        prompt=task_data.prompt, repository_url=task_data.repository_url
+        prompt=task_data.prompt,
+        repository_url=task_data.repository_url,
+        api_keys=task_data.api_keys,
     )
 
     return TaskResponse(

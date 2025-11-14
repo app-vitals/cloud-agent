@@ -1,5 +1,6 @@
 """Task service for business logic."""
 
+import json
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
@@ -7,7 +8,9 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlmodel import select
 
+from app.core.config import settings
 from app.core.database import get_session
+from app.core.encryption import encrypt_data
 from app.core.errors import NotFoundError
 from app.models import Task, TaskLog
 
@@ -18,10 +21,20 @@ class TaskService:
     """Service for task-related business logic."""
 
     @staticmethod
-    def create_task(prompt: str, repository_url: str) -> Task:
+    def create_task(
+        prompt: str, repository_url: str, api_keys: dict[str, str] | None = None
+    ) -> Task:
         """Create a new task and queue it for execution."""
         with get_session() as session:
             task = Task(prompt=prompt, repository_url=repository_url, status="pending")
+
+            # Encrypt and store API keys if provided
+            if api_keys and settings.encryption_key:
+                api_keys_json = json.dumps(api_keys)
+                task.encrypted_api_keys = encrypt_data(
+                    api_keys_json, settings.encryption_key
+                )
+
             session.add(task)
             session.commit()
             session.refresh(task)
