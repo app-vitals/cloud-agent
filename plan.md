@@ -609,29 +609,36 @@ cloud-agent/
 
 **Status**:
 - ✅ Claude-toolkit integration (PR #10) - provides `/review-pr` commands
-- 🚧 Next: PR review automation
+- 🚧 Next: Manual PR review triggers (prove value before automating)
+
+**Approach**: Start with manual triggers, automate once confident
+1. **Phase 3.5a**: Manual task triggering with local output storage
+2. **Phase 3.5b**: Add Celery Beat scheduling once workflow proven
 
 **Tasks:**
 
-- [ ] Add Celery Beat scheduler
+- [ ] Manual PR review workflow (first)
+  - Trigger tasks manually via API for specific PRs
+  - Reviews saved to sandbox (retrieve via logs/artifacts)
+  - Store output locally for review
+  - Iterate on prompts and output format
+  - Test with real PRs across repositories
+
+- [ ] Add Celery Beat scheduler (after manual workflow proven)
   - Create `app/tasks/scheduled.py` for scheduled task definitions
   - Configure beat schedule in celery config
+  - Daily scheduled task to review open PRs
   - Test locally with `celery beat`
   - Add beat service to render.yaml
 
-- [ ] Implement PR review automation (first scheduled task)
-  - Daily scheduled task to review open PRs
-  - Start with: Reviews saved to files (manual review workflow)
-  - Future: Post reviews as PR comments via `gh pr review` CLI
-  - Test with real repositories
+- [ ] Future: Post reviews directly via `gh pr review` CLI
 
-- [ ] Future scheduled tasks (TBD after PR automation working)
+- [ ] Future scheduled tasks (TBD)
   - Sentry error investigation
   - Dependency updates
   - CI monitoring
-  - Daily summaries
 
-**Why this matters**: Scheduled automation is the killer feature - agents that work for you automatically, not just on-demand task execution.
+**Why this matters**: Scheduled automation is the killer feature, but start manual to prove value and iterate on workflow.
 
 ### Phase 4: Production Deployment (Week 4)
 **Goal**: Deploy to Render with proper secret management
