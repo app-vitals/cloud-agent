@@ -607,28 +607,29 @@ cloud-agent/
 ### Phase 3.5: Scheduled Tasks & Automation (Week 3)
 **Goal**: Add Celery Beat for scheduled/recurring tasks - the core value proposition
 
+**Status**:
+- ✅ Claude-toolkit integration (PR #10) - provides `/review-pr` commands
+- 🚧 Next: PR review automation
+
+**Tasks:**
+
 - [ ] Add Celery Beat scheduler
   - Create `app/tasks/scheduled.py` for scheduled task definitions
   - Configure beat schedule in celery config
   - Test locally with `celery beat`
   - Add beat service to render.yaml
 
-- [ ] Implement example scheduled tasks
-  - Daily PR review automation
-  - Weekly dependency update checks
-  - Hourly CI failure monitoring
-  - Hourly Sentry error resolution (investigate and fix or create issues)
-  - Daily summary/briefing tasks
+- [ ] Implement PR review automation (first scheduled task)
+  - Daily scheduled task to review open PRs
+  - Start with: Reviews saved to files (manual review workflow)
+  - Future: Post reviews as PR comments via `gh pr review` CLI
+  - Test with real repositories
 
-- [ ] Test scheduling patterns
-  - Cron schedules (daily, weekly, hourly)
-  - Multiple concurrent scheduled tasks
-  - Task chaining (task A triggers task B)
-
-- [ ] Documentation
-  - How to create scheduled tasks
-  - Schedule syntax reference
-  - Example use cases
+- [ ] Future scheduled tasks (TBD after PR automation working)
+  - Sentry error investigation
+  - Dependency updates
+  - CI monitoring
+  - Daily summaries
 
 **Why this matters**: Scheduled automation is the killer feature - agents that work for you automatically, not just on-demand task execution.
 
