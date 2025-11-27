@@ -73,28 +73,20 @@ class SandboxService:
         return sandbox
 
     @staticmethod
-    def setup_git_config(sandbox: Sandbox) -> None:
-        """Set up git configuration in the sandbox."""
-        sandbox.commands.run('git config --global user.email "agent@cloudagent.dev"')
-        sandbox.commands.run('git config --global user.name "Cloud Agent"')
-        logger.info("Git configured in sandbox")
+    def run_command(sandbox: Sandbox, command: str, timeout: int | None = None) -> any:
+        """Run a command in the sandbox.
 
-    @staticmethod
-    def clone_repository(sandbox: Sandbox, repository_url: str) -> tuple[bool, str]:
-        """Clone repository into the sandbox.
+        Thin wrapper around sandbox.commands.run() for consistency.
+
+        Args:
+            sandbox: The sandbox instance
+            command: Command to run
+            timeout: Optional timeout in seconds
 
         Returns:
-            Tuple of (success, error_message)
+            Command result object with exit_code, stdout, stderr
         """
-        result = sandbox.commands.run(f"git clone {repository_url} /home/user/repo")
-
-        if result.exit_code != 0:
-            error_msg = f"Failed to clone repo: {result.stderr}"
-            logger.error(error_msg)
-            return False, error_msg
-
-        logger.info(f"Cloned repository {repository_url}")
-        return True, ""
+        return sandbox.commands.run(command, timeout=timeout)
 
     @staticmethod
     def run_claude_code(

@@ -25,11 +25,20 @@ def test_execute_task_success(mocker):
         "app.services.agent_execution.SandboxService.create_sandbox",
         return_value=mock_sandbox,
     )
-    mocker.patch("app.services.agent_execution.SandboxService.setup_git_config")
+
+    # Mock setup_sandbox_environment (orchestration logic)
     mocker.patch(
-        "app.services.agent_execution.SandboxService.clone_repository",
-        return_value=(True, ""),
+        "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
     )
+
+    # Mock run_command for git clone
+    mock_result = MagicMock()
+    mock_result.exit_code = 0
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        return_value=mock_result,
+    )
+
     mocker.patch(
         "app.services.agent_execution.SandboxService.run_claude_code",
         return_value=(0, "Success output", ""),
@@ -59,10 +68,18 @@ def test_execute_task_clone_failure(mocker):
         "app.services.agent_execution.SandboxService.create_sandbox",
         return_value=mock_sandbox,
     )
-    mocker.patch("app.services.agent_execution.SandboxService.setup_git_config")
+    # Mock setup_sandbox_environment
     mocker.patch(
-        "app.services.agent_execution.SandboxService.clone_repository",
-        return_value=(False, "Failed to clone: repository not found"),
+        "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
+    )
+
+    # Mock run_command to return failure for git clone
+    mock_result = MagicMock()
+    mock_result.exit_code = 1
+    mock_result.stderr = "repository not found"
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        return_value=mock_result,
     )
 
     # Execute the task
@@ -89,11 +106,20 @@ def test_execute_task_claude_failure(mocker):
         "app.services.agent_execution.SandboxService.create_sandbox",
         return_value=mock_sandbox,
     )
-    mocker.patch("app.services.agent_execution.SandboxService.setup_git_config")
+
+    # Mock setup_sandbox_environment
     mocker.patch(
-        "app.services.agent_execution.SandboxService.clone_repository",
-        return_value=(True, ""),
+        "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
     )
+
+    # Mock run_command for successful git clone
+    mock_result = MagicMock()
+    mock_result.exit_code = 0
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        return_value=mock_result,
+    )
+
     mocker.patch(
         "app.services.agent_execution.SandboxService.run_claude_code",
         return_value=(1, "Partial output", "Error: command failed"),
@@ -108,6 +134,94 @@ def test_execute_task_claude_failure(mocker):
 
     # Verify sandbox was killed
     mock_sandbox.kill.assert_called_once()
+
+
+def test_setup_sandbox_environment_success(mocker):
+    """Test successful sandbox environment setup."""
+    mock_sandbox = MagicMock()
+
+    # Mock run_command to return success
+    mock_result = MagicMock()
+    mock_result.exit_code = 0
+    mock_run_command = mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        return_value=mock_result,
+    )
+
+    # Call setup
+    AgentExecutionService.setup_sandbox_environment(mock_sandbox)
+
+    # Verify git config was called (2 commands)
+    assert mock_run_command.call_count >= 2
+
+    # Verify git config commands
+    calls = [str(call) for call in mock_run_command.call_args_list]
+    assert any("git config" in str(call) and "user.email" in str(call) for call in calls)
+    assert any("git config" in str(call) and "user.name" in str(call) for call in calls)
+
+    # Verify toolkit clone was attempted
+    assert any("claude-toolkit" in str(call) for call in calls)
+
+
+def test_setup_sandbox_environment_toolkit_clone_failure(mocker):
+    """Test sandbox setup when toolkit clone fails."""
+    mock_sandbox = MagicMock()
+
+    # Mock run_command: git config succeeds, toolkit clone fails
+    call_count = [0]
+
+    def mock_run_command_side_effect(sandbox, command, **kwargs):
+        call_count[0] += 1
+        mock_result = MagicMock()
+        # First two calls (git config) succeed
+        if call_count[0] <= 2:
+            mock_result.exit_code = 0
+        else:
+            # Toolkit clone fails
+            mock_result.exit_code = 1
+            mock_result.stderr = "Failed to clone"
+        return mock_result
+
+    mock_run_command = mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        side_effect=mock_run_command_side_effect,
+    )
+
+    # Call setup - should not raise despite toolkit failure
+    AgentExecutionService.setup_sandbox_environment(mock_sandbox)
+
+    # Verify git config was still called
+    assert mock_run_command.call_count >= 2
+
+
+def test_setup_sandbox_environment_toolkit_install_failure(mocker):
+    """Test sandbox setup when toolkit install script fails."""
+    mock_sandbox = MagicMock()
+
+    call_count = [0]
+
+    def mock_run_command_side_effect(sandbox, command, **kwargs):
+        call_count[0] += 1
+        mock_result = MagicMock()
+        # Git config + clone succeed
+        if call_count[0] <= 3:
+            mock_result.exit_code = 0
+        else:
+            # Install script fails
+            mock_result.exit_code = 1
+            mock_result.stderr = "Install failed"
+        return mock_result
+
+    mock_run_command = mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        side_effect=mock_run_command_side_effect,
+    )
+
+    # Call setup - should not raise despite install failure
+    AgentExecutionService.setup_sandbox_environment(mock_sandbox)
+
+    # Verify install was attempted
+    assert mock_run_command.call_count >= 4
 
 
 def test_execute_task_not_found(mocker):
@@ -134,11 +248,20 @@ def test_execute_task_sandbox_cleanup_error(mocker):
         "app.services.agent_execution.SandboxService.create_sandbox",
         return_value=mock_sandbox,
     )
-    mocker.patch("app.services.agent_execution.SandboxService.setup_git_config")
+
+    # Mock setup_sandbox_environment
     mocker.patch(
-        "app.services.agent_execution.SandboxService.clone_repository",
-        return_value=(True, ""),
+        "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
     )
+
+    # Mock run_command for successful git clone
+    mock_result = MagicMock()
+    mock_result.exit_code = 0
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        return_value=mock_result,
+    )
+
     mocker.patch(
         "app.services.agent_execution.SandboxService.run_claude_code",
         return_value=(0, "Success", ""),
