@@ -604,29 +604,95 @@ cloud-agent/
   - Code generation
   - Test writing
 
-### Phase 4: Production Readiness (Week 3-4)
-- [ ] Implement full API key management system
-  - API keys table in database
-  - Key generation, hashing (bcrypt), and storage
-  - Admin endpoint for key management
-  - Replace simple admin key with proper API key auth
-- [ ] Implement credentials encryption
-- [ ] Add rate limiting
-- [ ] Implement proper logging and monitoring
-- [ ] Add task cancellation
-- [ ] Write comprehensive tests
-- [ ] Documentation and API docs
-- [ ] Create render.yaml for deployment
-- [ ] Deploy to Render for production
+### Phase 3.5: Scheduled Tasks & Automation (Week 3)
+**Goal**: Add Celery Beat for scheduled/recurring tasks - the core value proposition
 
-### Phase 5: Enhancements (Future)
+- [ ] Add Celery Beat scheduler
+  - Create `app/tasks/scheduled.py` for scheduled task definitions
+  - Configure beat schedule in celery config
+  - Test locally with `celery beat`
+  - Add beat service to render.yaml
+
+- [ ] Implement example scheduled tasks
+  - Daily PR review automation
+  - Weekly dependency update checks
+  - Hourly CI failure monitoring
+  - Hourly Sentry error resolution (investigate and fix or create issues)
+  - Daily summary/briefing tasks
+
+- [ ] Test scheduling patterns
+  - Cron schedules (daily, weekly, hourly)
+  - Multiple concurrent scheduled tasks
+  - Task chaining (task A triggers task B)
+
+- [ ] Documentation
+  - How to create scheduled tasks
+  - Schedule syntax reference
+  - Example use cases
+
+**Why this matters**: Scheduled automation is the killer feature - agents that work for you automatically, not just on-demand task execution.
+
+### Phase 4: Production Deployment (Week 4)
+**Goal**: Deploy to Render with proper secret management
+
+- [ ] Render deployment setup
+  - Create render.yaml (web + worker + beat services)
+  - Configure PostgreSQL database
+  - Configure Redis (required for Celery)
+  - Set up environment secrets (Render encrypted secrets)
+
+- [ ] Secret management
+  - Use Render environment secrets for ENCRYPTION_KEY
+  - Store SYSTEM_ANTHROPIC_API_KEY securely
+  - Store SYSTEM_GITHUB_TOKEN securely
+  - Store API_SECRET_KEY securely
+
+- [ ] Deploy and validate
+  - Deploy all services to Render
+  - Test end-to-end task execution
+  - Verify scheduled tasks run correctly
+  - Monitor costs (Novita sandbox usage)
+
+- [ ] Production monitoring
+  - Set up logging and error tracking
+  - Monitor task execution metrics
+  - Track sandbox costs
+  - Alert on failures
+
+**Cost estimate**: $3-10/month (Redis $3/month + Novita usage ~$1-7/month depending on task frequency)
+
+### Phase 5: Account-Based API Keys (Future)
+**Goal**: Multi-user support with proper authentication
+
+- [ ] User/account management
+  - Add accounts table (id, name, created_at)
+  - Add account_secrets table (encrypted API keys per account)
+  - Link tasks to accounts (account_id foreign key)
+
+- [ ] API key authentication
+  - Generate and hash API keys (bcrypt)
+  - Store key prefix for identification
+  - Implement key-based authentication
+  - Add rate limiting per API key
+
+- [ ] Account-level secrets
+  - Store encrypted Anthropic API keys per account
+  - Store encrypted GitHub tokens per account
+  - Decrypt and pass to sandboxes during task execution
+  - Use Render ENCRYPTION_KEY for encryption
+
+**Note**: Deliberately skipping task-based API keys - account-based makes more sense for real usage.
+
+### Phase 6: Enhancements (Future)
 - [ ] Add sandbox provider switching support (E2B fallback)
 - [ ] Web UI for task management and monitoring
 - [ ] Webhooks for task completion notifications
-- [ ] Multi-user support with teams and permissions
+- [ ] GitHub webhooks for event-driven automation
 - [ ] Prompt templates/snippets for common tasks
 - [ ] Cost tracking and quotas per API key
 - [ ] Task history and analytics
+- [ ] CLI tool for easier task management
+- [ ] Streaming API (SSE) for real-time progress
 - [ ] Evaluate Agent SDK for more programmatic control
 - [ ] BYOC deployment (run Novita in your own VPC)
 
@@ -640,31 +706,77 @@ cloud-agent/
 2. **Development Approach**: ✅ Local-first development
    - Phase 1-3: Build and test everything locally
    - Use simple admin key authentication from environment variable
-   - Phase 4: Add production features (full API key management) and deploy to Render
+   - Phase 3.5: Add Celery Beat for scheduled tasks
+   - Phase 4: Deploy to Render with managed secrets
    - Use existing local Postgres and Redis (no Docker Compose)
 
 3. **Sandbox Provider**: ✅ Novita AI (E2B-compatible, 30% cheaper, no base subscription)
    - Focus on Novita only in Phase 1-4
-   - Add E2B fallback support in Phase 5
+   - Add E2B fallback support in Phase 6
 
 4. **Agent Integration**: ✅ Claude Code CLI with natural language prompts
    - Pass user prompts directly to Claude Code
    - Can migrate to Agent SDK later if more control needed
 
-5. **Deployment Platform**: ✅ Render (best reliability, native Celery workers, built for this stack)
-   - Delayed to Phase 4
+5. **Deployment Platform**: ✅ Render (best reliability, native Celery workers + Beat, built for this stack)
+   - Render has native worker service type for Celery
+   - Managed Redis and PostgreSQL
+   - Environment secrets for secure credential storage
+   - Simple deployment via render.yaml
+
+6. **Core Value Proposition**: ✅ Scheduled automation (Celery Beat)
+   - On-demand tasks are useful, but scheduled tasks are the killer feature
+   - Daily/weekly/hourly automations that run without manual intervention
+   - Examples: PR reviews, dependency updates, CI monitoring, summaries
+   - Phase 3.5 focuses on this before production deployment
+
+7. **Secret Management**: ✅ Render environment secrets (not custom encryption)
+   - Use Render's built-in encrypted secrets from day 1
+   - No migration from custom Fernet encryption needed
+   - Industry-standard approach with backup/recovery built-in
+
+8. **API Key Architecture**: ✅ Skip task-based keys, go straight to account-based (Phase 5)
+   - Task-based API keys don't match real usage patterns
+   - Account-based keys make more sense (users want per-account, not per-task)
+   - Defer to Phase 5 to avoid building wrong abstraction
 
 ## Open Questions & Decisions Needed
 
-1. **Credentials storage**: Encrypt in DB vs external secrets manager (AWS/GCP)
-2. **Task timeout**: Default 1 hour, configurable per task type?
-3. **Concurrent tasks**: Limit per API key to prevent abuse?
-4. **BYOC deployment**: Deploy Novita in our own VPC for Phase 5?
+1. **Task timeout**: Default 10 minutes (sandbox), 5 minutes (Claude Code), or configurable?
+2. **Concurrent tasks**: Limit per API key to prevent abuse? (Phase 5 decision)
+3. **BYOC deployment**: Deploy Novita in our own VPC for Phase 6?
+4. **Notification system**: Email, Slack, webhook for task completion?
+5. **Rate limiting strategy**: Per API key, per account, or global? (Phase 5 decision)
 
 ## Next Steps
 
-1. ✅ Review and approve this plan
-2. Initialize repository with UV and project structure
-3. Start Phase 1 implementation (local development first)
-4. Connect to existing local Postgres and Redis instances
-5. Deploy to Render in Phase 4 once local version is working
+### Current Status
+- ✅ Phase 1: Foundation complete
+- ✅ Phase 2: Sandbox integration complete
+- ✅ Phase 3: Agent integration complete
+- 🚧 Phase 3.5: Scheduled tasks (in progress)
+
+### Immediate Next Steps
+
+1. **Add Celery Beat for scheduled tasks** (Phase 3.5)
+   - Create `app/tasks/scheduled.py`
+   - Configure beat schedule
+   - Test locally with sample scheduled tasks
+   - Document scheduling patterns
+
+2. **Prepare for Render deployment** (Phase 4)
+   - Create render.yaml configuration
+   - Document environment variables needed
+   - Plan secret management strategy
+
+3. **Build example automations** (Phase 3.5)
+   - Daily PR review automation
+   - Weekly dependency checks
+   - Hourly Sentry error resolution
+   - Validate prompts and outputs
+
+4. **Deploy to production** (Phase 4)
+   - Deploy to Render
+   - Configure managed secrets
+   - Monitor costs and performance
+   - Iterate on scheduled tasks
