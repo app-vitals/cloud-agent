@@ -604,39 +604,60 @@ cloud-agent/
   - Code generation
   - Test writing
 
-### Phase 3.5: Scheduled Tasks & Automation (Week 3)
-**Goal**: Add Celery Beat for scheduled/recurring tasks - the core value proposition
+### Phase 3.5: Agent SDK Migration + Scheduled Tasks (Week 3)
+**Goal**: Migrate to Agent SDK for better session management, then add scheduling
 
 **Status**:
-- ✅ Claude-toolkit integration (PR #10) - provides `/review-pr` commands
-- 🚧 Next: Manual PR review triggers (prove value before automating)
+- ✅ CLI tool (`ca`) for manual task triggering
+- ✅ Claude-toolkit integration - provides `/review-pr` commands
+- ✅ OAuth token support merged
+- ✅ Successful end-to-end PR review test (ok-wow/ok-wow-ai#633)
+- 🚧 Next: Migrate from CLI wrapper to Agent SDK
 
-**Approach**: Start with manual triggers, automate once confident
-1. **Phase 3.5a**: Manual task triggering with local output storage
+**Agent SDK Migration** (Priority):
+Switching from `claude` CLI wrapper to `claude-agent-sdk` Python library for:
+- ✅ **No prompt escaping** - proper API instead of bash escaping hacks
+- ✅ **Session management** - `ClaudeSDKClient` with `resume` parameter
+- ✅ **Structured responses** - typed Message objects vs parsing JSON streams
+- ✅ **Better error handling** - production-ready with built-in monitoring
+- ✅ **Branch creation + file retrieval** - push task outputs to git branches
+- ✅ **Session resumption** - resume tasks locally or in new sandboxes
+
+**Approach**: Migrate to SDK, then add scheduling
+1. **Phase 3.5a**: Migrate to Agent SDK with branch-based output
 2. **Phase 3.5b**: Add Celery Beat scheduling once workflow proven
 
 **Tasks:**
 
-- [ ] Manual PR review workflow (first)
-  - Trigger tasks manually via API for specific PRs
-  - Reviews saved to sandbox (retrieve via logs/artifacts)
-  - Store output locally for review
-  - Iterate on prompts and output format
-  - Test with real PRs across repositories
+- [ ] **Migrate to Agent SDK** (Phase 3.5a - Priority)
+  - [ ] Install `claude-agent-sdk` in sandbox template
+  - [ ] Replace `SandboxService.run_claude_code()` with SDK `query()`
+  - [ ] Add branch creation for every task (`task/<task-id>`)
+  - [ ] Commit and push task outputs before sandbox cleanup
+  - [ ] Store branch name and session_id with task
+  - [ ] Update CLI to show branch info after task creation
+  - [ ] Test session resumption with `ClaudeSDKClient` + `resume` parameter
+  - [ ] Remove prompt escaping complexity from `run_claude_code()`
+  - [ ] Update tests for SDK integration
 
-- [ ] Add Celery Beat scheduler (after manual workflow proven)
-  - Create `app/tasks/scheduled.py` for scheduled task definitions
-  - Configure beat schedule in celery config
-  - Daily scheduled task to review open PRs
-  - Test locally with `celery beat`
-  - Add beat service to render.yaml
+- [ ] **Iterate on PR review workflow** (Phase 3.5a)
+  - [ ] Review PR_REVIEW_633.md output from test run
+  - [ ] Refine prompts for concise, actionable feedback
+  - [ ] Test with multiple PRs to validate approach
+  - [ ] Add support for retrieving files from branch locally
 
-- [ ] Future: Post reviews directly via `gh pr review` CLI
+- [ ] **Add Celery Beat scheduler** (Phase 3.5b - after SDK migration)
+  - [ ] Create `app/tasks/scheduled.py` for scheduled task definitions
+  - [ ] Configure beat schedule in celery config
+  - [ ] Daily scheduled task to review open PRs
+  - [ ] Test locally with `celery beat`
+  - [ ] Add beat service to render.yaml
 
-- [ ] Future scheduled tasks (TBD)
-  - Sentry error investigation
-  - Dependency updates
-  - CI monitoring
+- [ ] **Future automations** (Phase 3.5b+)
+  - [ ] Post reviews directly via `gh pr review` CLI
+  - [ ] Sentry error investigation
+  - [ ] Dependency updates
+  - [ ] CI monitoring
 
 **Why this matters**: Scheduled automation is the killer feature, but start manual to prove value and iterate on workflow.
 
