@@ -76,7 +76,8 @@ class SandboxService:
     def run_command(sandbox: Sandbox, command: str, timeout: int | None = None) -> any:
         """Run a command in the sandbox.
 
-        Thin wrapper around sandbox.commands.run() for consistency.
+        Thin wrapper around sandbox.commands.run() that catches exceptions
+        and returns result with exit_code, stdout, stderr.
 
         Args:
             sandbox: The sandbox instance
@@ -85,8 +86,24 @@ class SandboxService:
 
         Returns:
             Command result object with exit_code, stdout, stderr
+            (even for non-zero exit codes)
         """
-        return sandbox.commands.run(command, timeout=timeout)
+        try:
+            return sandbox.commands.run(command, timeout=timeout)
+        except CommandExitException as e:
+            # E2B raises exception for non-zero exit codes, but we can still get the output
+            # Return a result-like object with the error details
+            class CommandResult:
+                def __init__(self, exit_code, stdout, stderr):
+                    self.exit_code = exit_code
+                    self.stdout = stdout
+                    self.stderr = stderr
+
+            return CommandResult(
+                exit_code=e.exit_code,
+                stdout=e.stdout if hasattr(e, "stdout") else "",
+                stderr=e.stderr if hasattr(e, "stderr") else str(e),
+            )
 
     @staticmethod
     def run_claude_code(

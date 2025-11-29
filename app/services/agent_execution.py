@@ -36,9 +36,14 @@ class AgentExecutionService:
 
         # Install claude-toolkit (provides /review-pr and other commands)
         logger.info("Installing claude-toolkit...")
+        # Configure git credential helper to use environment variable
+        SandboxService.run_command(
+            sandbox,
+            'git config --global credential.helper "!f() { echo username=x-access-token; echo password=$GITHUB_TOKEN; }; f"',
+        )
         result = SandboxService.run_command(
             sandbox,
-            "git clone https://github.com/dmcaulay/claude-toolkit.git /home/user/.claude-toolkit",
+            "git clone https://github.com/app-vitals/claude-toolkit.git /home/user/.claude-toolkit",
         )
 
         if result.exit_code == 0:
