@@ -677,6 +677,14 @@ Ran 6 comprehensive tests - all passed! See `SDK_MIGRATION_PLAN.md` for details.
   - [ ] Test `ca task show <id>` to fetch branch locally
   - [ ] Add support for retrieving files from branch locally
 
+- [ ] **CLI: Apply task files to working directory** (Phase 3.5a)
+  - [ ] Add `ca task apply <task_id>` command
+  - [ ] Copies files from `logs/tasks/{task_id}/files/` to current working directory
+  - [ ] Preserves directory structure
+  - [ ] Shows diff summary before applying
+  - [ ] Optional `--dry-run` flag to preview changes
+  - [ ] Use case: Apply changes from completed task to local repo
+
 - [ ] **Add Celery Beat scheduler** (Phase 3.5b - after SDK migration)
   - [ ] Create `app/tasks/scheduled.py` for scheduled task definitions
   - [ ] Configure beat schedule in celery config
