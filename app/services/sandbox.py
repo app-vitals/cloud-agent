@@ -156,11 +156,11 @@ class SandboxService:
             task_input["resume_session_id"] = resume_session_id
         sandbox.files.write("/tmp/task_input.json", json.dumps(task_input))
 
-        # Run agent with timeout
+        # Run agent with timeout (using system python3, SDK is pre-installed)
         timed_out = False
         try:
             result = sandbox.commands.run(
-                "cd /home/user/repo && uv run /tmp/sandbox_agent.py",
+                "cd /home/user/repo && python3 /tmp/sandbox_agent.py",
                 timeout=timeout
             )
             exit_code = result.exit_code

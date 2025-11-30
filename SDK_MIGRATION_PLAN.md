@@ -252,6 +252,12 @@ Path(f"{task_dir}/session.jsonl").write_text(session_jsonl)
 - Session file survives at `/home/user/.claude/projects/-home-user-repo/{session_id}.jsonl`
 - This means we get partial logs even when tasks timeout - no separate log collection needed!
 
+**✅ UV OVERHEAD FIX:**
+- **Problem**: `uv run` inline scripts caused SIGKILL (created new Python env each time)
+- **Solution**: Pre-install SDK with `uv pip install --system` during sandbox setup
+- **Result**: Run with plain `python3` instead of `uv run` - eliminates overhead
+- **Status**: Tasks complete successfully on first try, no retries needed!
+
 ### Phase 3: Cleanup ✅ COMPLETED
 
 **Goal**: Remove old CLI wrapper code

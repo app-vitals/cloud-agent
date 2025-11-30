@@ -7,18 +7,14 @@ It reads configuration from /tmp/task_input.json and writes results to /tmp/task
 Usage (in sandbox):
     # New session
     echo '{"prompt": "Fix the bug"}' > /tmp/task_input.json
-    uv run /tmp/sandbox_agent.py
+    python3 /tmp/sandbox_agent.py
 
     # Resume existing session
     echo '{"prompt": "Continue fixing", "resume_session_id": "abc-123"}' > /tmp/task_input.json
-    uv run /tmp/sandbox_agent.py
+    python3 /tmp/sandbox_agent.py
+
+Note: Requires claude-agent-sdk to be installed (done during sandbox setup)
 """
-# /// script
-# requires-python = ">=3.12"
-# dependencies = [
-#     "claude-agent-sdk",
-# ]
-# ///
 
 import asyncio
 import json
