@@ -2,6 +2,7 @@
 
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -104,10 +105,18 @@ def get_task(task_id: str = typer.Argument(..., help="Task ID")):
         response.raise_for_status()
         task = response.json()
 
+    # Calculate duration
+    created = datetime.fromisoformat(task['created_at'].replace('Z', '+00:00'))
+    updated = datetime.fromisoformat(task['updated_at'].replace('Z', '+00:00'))
+    duration = updated - created
+    duration_str = f"{duration.total_seconds():.1f}s"
+
     console.print(f"[bold]Task {task['id']}[/bold]")
     console.print(f"  Status: {task['status']}")
     console.print(f"  Repository: {task['repository_url']}")
     console.print(f"  Created: {task['created_at']}")
+    console.print(f"  Updated: {task['updated_at']}")
+    console.print(f"  Duration: {duration_str}")
 
     if task.get("branch_name"):
         console.print(f"  Branch: [cyan]{task['branch_name']}[/cyan]")
