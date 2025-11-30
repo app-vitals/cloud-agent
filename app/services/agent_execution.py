@@ -9,6 +9,9 @@ from app.services.task import TaskService
 
 logger = logging.getLogger(__name__)
 
+# File extraction limits
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
 
 class AgentExecutionService:
     """Service for agent execution business logic."""
@@ -197,8 +200,25 @@ class AgentExecutionService:
                             # Read file from sandbox
                             content = sandbox.files.read(f"/home/user/repo/{file_path}")
 
+                            # Check file size limit
+                            if len(content) > MAX_FILE_SIZE:
+                                logger.warning(
+                                    f"Skipping large file: {file_path} ({len(content)} bytes)"
+                                )
+                                continue
+
                             # Save locally preserving directory structure
                             local_file = task_dir / file_path
+
+                            # Validate path to prevent traversal outside task directory
+                            resolved_file = local_file.resolve()
+                            resolved_task_dir = task_dir.resolve()
+                            if not resolved_file.is_relative_to(resolved_task_dir):
+                                logger.warning(
+                                    f"Skipping file outside task dir: {file_path}"
+                                )
+                                continue
+
                             local_file.parent.mkdir(parents=True, exist_ok=True)
                             local_file.write_text(content)
 
