@@ -3,7 +3,6 @@
 import os
 import re
 import subprocess
-import time
 
 from dotenv import load_dotenv
 
@@ -44,7 +43,9 @@ def main():
     print("Prerequisites:")
     print("  This test requires the following services to be running:")
     print("  1. API server: uv run uvicorn app.main:app --reload")
-    print("  2. Celery worker: uv run celery -A app.celery_app worker --loglevel=info\n")
+    print(
+        "  2. Celery worker: uv run celery -A app.celery_app worker --loglevel=info\n"
+    )
 
     # Test 1: Create a task
     print("1. Creating a test task via CLI...")
@@ -52,11 +53,22 @@ def main():
     prompt = "Create a file called hello.txt with the text 'Hello World!'"
 
     exit_code, stdout, stderr = run_cli_command(
-        ["uv", "run", "python", "-m", "app.cli", "task", "create", prompt, "--repo", repo]
+        [
+            "uv",
+            "run",
+            "python",
+            "-m",
+            "app.cli",
+            "task",
+            "create",
+            prompt,
+            "--repo",
+            repo,
+        ]
     )
 
     if exit_code != 0:
-        print(f"   ✗ Task creation failed")
+        print("   ✗ Task creation failed")
         print(f"   stdout: {stdout}")
         print(f"   stderr: {stderr}")
         return 1
@@ -64,7 +76,7 @@ def main():
     # Extract task ID from output
     task_id_match = re.search(r"Task created: ([a-f0-9-]+)", stdout)
     if not task_id_match:
-        print(f"   ✗ Could not extract task ID from output:")
+        print("   ✗ Could not extract task ID from output:")
         print(f"   {stdout}")
         return 1
 
@@ -73,7 +85,7 @@ def main():
 
     # Check for branch name in output
     if "Branch:" in stdout:
-        print(f"   ✓ Branch info displayed in output\n")
+        print("   ✓ Branch info displayed in output\n")
     else:
         print()
 
@@ -84,30 +96,41 @@ def main():
     )
 
     if exit_code != 0:
-        print(f"   ✗ Failed to get task")
+        print("   ✗ Failed to get task")
         print(f"   stderr: {stderr}")
         return 1
 
-    print(f"   ✓ Retrieved task details")
+    print("   ✓ Retrieved task details")
     if "Branch:" in stdout:
-        print(f"   ✓ Branch info displayed\n")
+        print("   ✓ Branch info displayed\n")
     else:
         print()
 
     # Test 3: Wait for task completion
     print("3. Waiting for task to complete (using CLI wait)...")
     exit_code, stdout, stderr = run_cli_command(
-        ["uv", "run", "python", "-m", "app.cli", "task", "wait", task_id, "--timeout", str(TIMEOUT)],
-        timeout=TIMEOUT + 10  # Give subprocess.run extra time beyond the wait timeout
+        [
+            "uv",
+            "run",
+            "python",
+            "-m",
+            "app.cli",
+            "task",
+            "wait",
+            task_id,
+            "--timeout",
+            str(TIMEOUT),
+        ],
+        timeout=TIMEOUT + 10,  # Give subprocess.run extra time beyond the wait timeout
     )
 
     if exit_code != 0:
-        print(f"   ✗ Task did not complete successfully")
+        print("   ✗ Task did not complete successfully")
         print(f"   stdout: {stdout}")
         print(f"   stderr: {stderr}")
         # Continue to check logs even if failed
     else:
-        print(f"   ✓ Task completed successfully\n")
+        print("   ✓ Task completed successfully\n")
 
     # Test 4: Get final task details
     print("4. Getting final task status...")
@@ -116,14 +139,14 @@ def main():
     )
 
     if exit_code == 0:
-        print(f"   ✓ Final task details:\n")
+        print("   ✓ Final task details:\n")
         # Print the output (it's already formatted nicely by the CLI)
         for line in task_status_stdout.split("\n"):
             if line.strip():
                 print(f"     {line}")
         print()
     else:
-        print(f"   ✗ Failed to get final task details")
+        print("   ✗ Failed to get final task details")
 
     # Test 5: Get task logs
     print("5. Fetching task logs via CLI...")
@@ -132,17 +155,17 @@ def main():
     )
 
     if exit_code == 0:
-        print(f"   ✓ Retrieved task logs")
+        print("   ✓ Retrieved task logs")
         # Show first few lines
         lines = stdout.split("\n")[:20]
         for line in lines:
             if line.strip():
                 print(f"     {line}")
         if len(stdout.split("\n")) > 20:
-            print(f"     ... (truncated)")
+            print("     ... (truncated)")
         print()
     else:
-        print(f"   ✗ Failed to get logs")
+        print("   ✗ Failed to get logs")
         print(f"   stderr: {stderr}\n")
 
     # Final verdict - check task status from step 4
@@ -155,7 +178,7 @@ def main():
         print("  - task logs")
         return 0
     else:
-        print(f"\n✗ Integration test FAILED - task did not complete")
+        print("\n✗ Integration test FAILED - task did not complete")
         return 1
 
 

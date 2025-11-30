@@ -56,4 +56,5 @@ def test_client():
 def auth_headers():
     """Provide authentication headers for API requests."""
     from app.core.config import settings
+
     return {"X-API-Key": settings.api_secret_key}

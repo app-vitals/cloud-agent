@@ -112,7 +112,9 @@ class TaskService:
             return task
 
     @staticmethod
-    def get_task_logs(task_id: UUID, limit: int = 100, offset: int = 0) -> tuple[list[dict], int]:
+    def get_task_logs(
+        task_id: UUID, limit: int = 100, offset: int = 0
+    ) -> tuple[list[dict], int]:
         """Get logs for a task from filesystem with pagination.
 
         Reads from session.jsonl file (JSONL format - one JSON object per line).
@@ -140,7 +142,7 @@ class TaskService:
             total = 0
             line_num = 0
 
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -171,4 +173,3 @@ class TaskService:
         except Exception as e:
             logger.error(f"Failed to read logs for task {task_id}: {e}")
             return [], 0
-

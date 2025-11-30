@@ -56,9 +56,7 @@ class AgentExecutionService:
             if result.exit_code == 0:
                 logger.info("Successfully installed claude-toolkit")
             else:
-                logger.warning(
-                    f"Failed to install claude-toolkit: {result.stderr}"
-                )
+                logger.warning(f"Failed to install claude-toolkit: {result.stderr}")
         else:
             logger.warning(f"Failed to clone claude-toolkit: {result.stderr}")
 
@@ -175,23 +173,26 @@ class AgentExecutionService:
                     # Commit changes
                     commit_msg = f"Task {task_id}: {task.prompt[:50]}"
                     commit_result = SandboxService.run_command(
-                        sandbox,
-                        f'cd /home/user/repo && git commit -m "{commit_msg}"'
+                        sandbox, f'cd /home/user/repo && git commit -m "{commit_msg}"'
                     )
 
                     if commit_result.exit_code == 0:
                         # Push to remote
                         push_result = SandboxService.run_command(
                             sandbox,
-                            f"cd /home/user/repo && git push -u origin {branch_name}"
+                            f"cd /home/user/repo && git push -u origin {branch_name}",
                         )
 
                         if push_result.exit_code == 0:
                             logger.info(f"Successfully pushed branch {branch_name}")
                         else:
-                            logger.warning(f"Failed to push branch: {push_result.stderr}")
+                            logger.warning(
+                                f"Failed to push branch: {push_result.stderr}"
+                            )
                     else:
-                        logger.warning(f"Failed to commit changes: {commit_result.stderr}")
+                        logger.warning(
+                            f"Failed to commit changes: {commit_result.stderr}"
+                        )
                 else:
                     logger.info("No changes to commit")
 

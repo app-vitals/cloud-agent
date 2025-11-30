@@ -146,7 +146,10 @@ def test_execute_task_claude_failure(mocker):
 
     # Verify result
     assert result["status"] == "failed"
-    assert "no result" in result.get("error", "").lower() or result.get("session_id") is not None
+    assert (
+        "no result" in result.get("error", "").lower()
+        or result.get("session_id") is not None
+    )
 
     # Verify sandbox was killed
     mock_sandbox.kill.assert_called_once()
@@ -172,7 +175,9 @@ def test_setup_sandbox_environment_success(mocker):
 
     # Verify git config commands
     calls = [str(call) for call in mock_run_command.call_args_list]
-    assert any("git config" in str(call) and "user.email" in str(call) for call in calls)
+    assert any(
+        "git config" in str(call) and "user.email" in str(call) for call in calls
+    )
     assert any("git config" in str(call) and "user.name" in str(call) for call in calls)
 
     # Verify toolkit clone was attempted
@@ -359,7 +364,7 @@ def test_execute_task_resume_branch_checkout(mocker):
         task.id,
         "pending",
         branch_name="ca/task/existing-branch",
-        session_id="existing-session-123"
+        session_id="existing-session-123",
     )
 
     # Mock sandbox service methods
@@ -413,9 +418,7 @@ def test_execute_task_resume_checkout_failure(mocker):
     # Create a test task with existing branch
     task = create_test_task()
     TaskService.update_task_status(
-        task.id,
-        "pending",
-        branch_name="ca/task/missing-branch"
+        task.id, "pending", branch_name="ca/task/missing-branch"
     )
 
     # Mock sandbox service methods
@@ -444,7 +447,9 @@ def test_execute_task_resume_checkout_failure(mocker):
         else:
             # Branch checkout fails
             mock_result.exit_code = 1
-            mock_result.stderr = "error: pathspec 'ca/task/missing-branch' did not match any file(s)"
+            mock_result.stderr = (
+                "error: pathspec 'ca/task/missing-branch' did not match any file(s)"
+            )
         return mock_result
 
     mocker.patch(

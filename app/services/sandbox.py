@@ -170,7 +170,9 @@ class SandboxService:
                     session_id = response.get("session_id")
                     result_text = response.get("result")
                     logger.info(f"Session ID: {session_id}")
-                    logger.info(f"Result: {result_text[:100] if result_text else 'None'}...")
+                    logger.info(
+                        f"Result: {result_text[:100] if result_text else 'None'}..."
+                    )
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse JSON response: {e}")
                     logger.error(f"Stdout: {stdout[:500]}")

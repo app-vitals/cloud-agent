@@ -4,7 +4,6 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import httpx
 import typer
@@ -84,7 +83,9 @@ def list_tasks(
 
     for task in tasks:
         # Truncate prompt for display
-        prompt = task["prompt"][:50] + "..." if len(task["prompt"]) > 50 else task["prompt"]
+        prompt = (
+            task["prompt"][:50] + "..." if len(task["prompt"]) > 50 else task["prompt"]
+        )
         created = task["created_at"][:10]  # Just the date
 
         table.add_row(
@@ -106,8 +107,8 @@ def get_task(task_id: str = typer.Argument(..., help="Task ID")):
         task = response.json()
 
     # Calculate duration
-    created = datetime.fromisoformat(task['created_at'].replace('Z', '+00:00'))
-    updated = datetime.fromisoformat(task['updated_at'].replace('Z', '+00:00'))
+    created = datetime.fromisoformat(task["created_at"].replace("Z", "+00:00"))
+    updated = datetime.fromisoformat(task["updated_at"].replace("Z", "+00:00"))
     duration = updated - created
     duration_str = f"{duration.total_seconds():.1f}s"
 
@@ -146,7 +147,9 @@ def get_logs(
         console.print("[yellow]No logs found[/yellow]")
         return
 
-    console.print(f"[bold]Logs for task {task_id[:8]}[/bold] ({data['total']} messages)\n")
+    console.print(
+        f"[bold]Logs for task {task_id[:8]}[/bold] ({data['total']} messages)\n"
+    )
 
     # Print raw logs as JSON for simplicity and future-proofing
     import json
@@ -181,7 +184,7 @@ def wait_task(
             if status in ["completed", "failed", "cancelled"]:
                 console.print()  # New line
                 if status == "completed":
-                    console.print(f"[green]✓[/green] Task completed")
+                    console.print("[green]✓[/green] Task completed")
                 else:
                     console.print(f"[red]✗[/red] Task {status}")
                     if task.get("result"):
@@ -194,7 +197,9 @@ def wait_task(
 @pr_app.command("review")
 def review_pr(
     pr_number: int = typer.Argument(..., help="PR number to review"),
-    repo: str = typer.Option("ok-wow/ok-wow-ai", "--repo", help="GitHub repo (org/name)"),
+    repo: str = typer.Option(
+        "ok-wow/ok-wow-ai", "--repo", help="GitHub repo (org/name)"
+    ),
 ):
     """Review a GitHub pull request."""
 

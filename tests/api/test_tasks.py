@@ -1,6 +1,5 @@
 """Tests for task API endpoints."""
 
-from app.services import TaskService
 from tests.conftest import create_test_task
 
 
