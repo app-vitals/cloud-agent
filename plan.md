@@ -611,7 +611,7 @@ cloud-agent/
 - ✅ CLI tool (`ca`) for manual task triggering
 - ✅ Claude-toolkit integration - provides `/review-pr` commands
 - ✅ OAuth token support merged
-- ✅ Successful end-to-end PR review test (ok-wow/ok-wow-ai#633)
+- ✅ Successful end-to-end PR review test
 - ✅ **All SDK tests passed** - Ready for implementation!
 - 🚧 Next: Implement SDK integration in production code
 
