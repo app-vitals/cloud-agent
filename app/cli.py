@@ -154,7 +154,7 @@ def get_task(task_id: str = typer.Argument(..., help="Task ID")):
         console.print(f"  Branch: [cyan]{task['branch_name']}[/cyan]")
 
     if task.get("session_id"):
-        console.print(f"  Session: {task['session_id'][:8]}...")
+        console.print(f"  Session: {task['session_id']}")
 
     console.print(f"\n[bold]Prompt:[/bold]\n{task['prompt']}")
 
@@ -179,7 +179,7 @@ def get_logs(
         return
 
     console.print(
-        f"[bold]Logs for task {task_id[:8]}[/bold] ({data['total']} messages)\n"
+        f"[bold]Logs for task {task_id}[/bold] ({data['total']} messages)\n"
     )
 
     # Print raw logs as JSON for simplicity and future-proofing
