@@ -13,14 +13,14 @@ load_dotenv()
 TIMEOUT = 300  # 5 minutes max wait for task completion
 
 
-def run_cli_command(command: list[str]) -> tuple[int, str, str]:
+def run_cli_command(command: list[str], timeout: int = 30) -> tuple[int, str, str]:
     """Run a CLI command and return exit code, stdout, stderr."""
     try:
         result = subprocess.run(
             command,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
@@ -97,7 +97,8 @@ def main():
     # Test 3: Wait for task completion
     print("3. Waiting for task to complete (using CLI wait)...")
     exit_code, stdout, stderr = run_cli_command(
-        ["uv", "run", "python", "-m", "app.cli", "task", "wait", task_id, "--timeout", str(TIMEOUT)]
+        ["uv", "run", "python", "-m", "app.cli", "task", "wait", task_id, "--timeout", str(TIMEOUT)],
+        timeout=TIMEOUT + 10  # Give subprocess.run extra time beyond the wait timeout
     )
 
     if exit_code != 0:
@@ -110,14 +111,14 @@ def main():
 
     # Test 4: Get final task details
     print("4. Getting final task status...")
-    exit_code, stdout, stderr = run_cli_command(
+    exit_code, task_status_stdout, stderr = run_cli_command(
         ["uv", "run", "python", "-m", "app.cli", "task", "get", task_id]
     )
 
     if exit_code == 0:
         print(f"   ✓ Final task details:\n")
         # Print the output (it's already formatted nicely by the CLI)
-        for line in stdout.split("\n"):
+        for line in task_status_stdout.split("\n"):
             if line.strip():
                 print(f"     {line}")
         print()
@@ -144,8 +145,8 @@ def main():
         print(f"   ✗ Failed to get logs")
         print(f"   stderr: {stderr}\n")
 
-    # Final verdict
-    if "completed" in stdout.lower():
+    # Final verdict - check task status from step 4
+    if "completed" in task_status_stdout.lower():
         print("\n✓ Integration test PASSED!")
         print("  All CLI commands worked correctly:")
         print("  - task create")
