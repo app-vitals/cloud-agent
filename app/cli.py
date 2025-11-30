@@ -226,9 +226,7 @@ def wait_task(
 @pr_app.command("review")
 def review_pr(
     pr_number: int = typer.Argument(..., help="PR number to review"),
-    repo: str = typer.Option(
-        "ok-wow/ok-wow-ai", "--repo", help="GitHub repo (org/name)"
-    ),
+    repo: str = typer.Option(..., "--repo", help="GitHub repo (org/name)"),
 ):
     """Review a GitHub pull request."""
 
