@@ -137,33 +137,15 @@ def get_logs(
         console.print("[yellow]No logs found[/yellow]")
         return
 
-    console.print(f"[bold]Logs for task {task_id[:8]}[/bold] ({data['total']} messages)")
+    console.print(f"[bold]Logs for task {task_id[:8]}[/bold] ({data['total']} messages)\n")
 
-    for log in logs:
-        msg_type = log.get("type", "unknown")
+    # Print raw logs as JSON for simplicity and future-proofing
+    import json
 
-        # Color code by message type
-        if msg_type == "SystemMessage":
-            color = "cyan"
-            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
-        elif msg_type == "AssistantMessage":
-            color = "green"
-            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
-        elif msg_type == "UserMessage":
-            color = "blue"
-            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
-        elif msg_type == "ResultMessage":
-            color = "magenta"
-            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
-        else:
-            color = "white"
-            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
-
-        # Print data (simplified - just show first 200 chars)
-        data_str = str(log.get("data", {}))
-        if len(data_str) > 200:
-            data_str = data_str[:200] + "..."
-        console.print(f"  {data_str}")
+    for i, log in enumerate(logs, 1):
+        console.print(f"[dim]Message {i}:[/dim]")
+        console.print(json.dumps(log, indent=2))
+        console.print()  # Blank line between messages
 
 
 @task_app.command("wait")

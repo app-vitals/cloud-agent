@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import shlex
 from pathlib import Path
 from uuid import UUID
 
@@ -116,7 +117,7 @@ class SandboxService:
         resume_session_id: str | None = None,
         timeout: int | None = None,
     ) -> dict:
-        """Run agent task using Claude Agent SDK.
+        """Run agent task using Claude CLI directly.
 
         Args:
             sandbox: The Novita sandbox instance
@@ -129,11 +130,7 @@ class SandboxService:
             Dict with keys:
                 - session_id: Claude session ID for resumption
                 - result: Final result from agent
-                - cost: Total cost in USD
-                - duration_ms: Duration in milliseconds
-                - num_turns: Number of conversation turns
                 - timed_out: True if task timed out
-                - logs: List of message log entries
         """
         # Use default timeout from settings if not provided
         if timeout is None:
@@ -143,28 +140,41 @@ class SandboxService:
             f"Running agent task {task_id} with prompt: {prompt[:100]}... (timeout: {timeout}s)"
         )
 
-        # Read sandbox_agent.py script content
-        script_path = Path(__file__).parent.parent.parent / "scripts" / "sandbox_agent.py"
-        script_content = script_path.read_text()
+        # Build Claude command using shlex.quote() for safe escaping
+        # Pipe prompt via stdin (like original CLI wrapper)
+        # -p: non-interactive mode (skips workspace trust dialog)
+        # --dangerously-skip-permissions: bypass all permission checks (safe in sandbox)
+        # --output-format json: get structured JSON response with session_id and result
+        claude_cmd = f"cd /home/user/repo && echo {shlex.quote(prompt)} | claude -p --dangerously-skip-permissions"
 
-        # Write script to sandbox
-        sandbox.files.write("/tmp/sandbox_agent.py", script_content)
-
-        # Write task input
-        task_input = {"prompt": prompt}
         if resume_session_id:
-            task_input["resume_session_id"] = resume_session_id
-        sandbox.files.write("/tmp/task_input.json", json.dumps(task_input))
+            claude_cmd += f" --resume {shlex.quote(resume_session_id)}"
 
-        # Run agent with timeout (using system python3, SDK is pre-installed)
+        claude_cmd += " --output-format json"
+
+        # Run Claude with E2B timeout (no need for bash timeout wrapper)
         timed_out = False
+        session_id = None
+        result_text = None
+
         try:
-            result = sandbox.commands.run(
-                "cd /home/user/repo && python3 /tmp/sandbox_agent.py",
-                timeout=timeout
-            )
+            result = SandboxService.run_command(sandbox, claude_cmd, timeout=timeout)
             exit_code = result.exit_code
+            stdout = result.stdout
             logger.info(f"Agent task {task_id} completed with exit code {exit_code}")
+
+            # Parse JSON response to extract session_id and result
+            if stdout.strip():
+                try:
+                    response = json.loads(stdout)
+                    session_id = response.get("session_id")
+                    result_text = response.get("result")
+                    logger.info(f"Session ID: {session_id}")
+                    logger.info(f"Result: {result_text[:100] if result_text else 'None'}...")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse JSON response: {e}")
+                    logger.error(f"Stdout: {stdout[:500]}")
+
         except TimeoutException:
             logger.warning(f"Agent task {task_id} timed out after {timeout}s")
             timed_out = True
@@ -172,30 +182,15 @@ class SandboxService:
             logger.error(f"Agent task {task_id} failed with exception: {e}")
             raise
 
-        # Read outputs from sandbox (exist even if timed out due to progressive flushing)
-        try:
-            output_json = sandbox.files.read("/tmp/task_output.json")
-            output = json.loads(output_json)
-        except Exception as e:
-            logger.error(f"Failed to read task output: {e}")
-            output = {
-                "session_id": None,
-                "result": f"Error: Failed to read output - {e}",
-                "cost": 0,
-                "duration_ms": 0,
-                "num_turns": 0,
-            }
-
-        # Store session file (serves as logs - no separate log file needed!)
+        # Store session file from Claude's project directory
         task_dir = Path("logs/tasks") / str(task_id)
         task_dir.mkdir(parents=True, exist_ok=True)
 
-        session_id = output.get("session_id")
         if session_id:
             try:
                 # Session files are in ~/.claude/projects/<normalized-path>/{session_id}.jsonl
-                # The repo is cloned to /home/user/repo
-                session_file_path = f"/home/user/.claude/projects/-home-user-repo/{session_id}.jsonl"
+                session_dir = "/home/user/.claude/projects/-home-user-repo"
+                session_file_path = f"{session_dir}/{session_id}.jsonl"
                 session_jsonl = sandbox.files.read(session_file_path)
                 (task_dir / "session.jsonl").write_text(session_jsonl)
                 logger.info(f"Stored session file for task {task_id}")
@@ -207,7 +202,8 @@ class SandboxService:
             # No session created (likely errored early), create empty file
             (task_dir / "session.jsonl").write_text("")
 
-        # Add timed_out flag to output
-        output["timed_out"] = timed_out
-
-        return output
+        return {
+            "session_id": session_id,
+            "result": result_text or ("Task timed out" if timed_out else "No result"),
+            "timed_out": timed_out,
+        }

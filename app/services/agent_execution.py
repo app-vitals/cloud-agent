@@ -35,19 +35,6 @@ class AgentExecutionService:
         )
         logger.info("Git configured")
 
-        # Install Claude Agent SDK globally using uv (avoid inline script overhead)
-        logger.info("Installing Claude Agent SDK...")
-        result = SandboxService.run_command(
-            sandbox,
-            "uv pip install --system claude-agent-sdk",
-            timeout=60
-        )
-        if result.exit_code != 0:
-            error = f"Failed to install Claude Agent SDK: {result.stderr}"
-            logger.error(error)
-            raise RuntimeError(error)
-        logger.info("Successfully installed Claude Agent SDK")
-
         # Install claude-toolkit (provides /review-pr and other commands)
         logger.info("Installing claude-toolkit...")
         # Configure git credential helper to use environment variable

@@ -47,10 +47,9 @@ class TaskListResponse(BaseModel):
 
 
 class TaskLogResponse(BaseModel):
-    """Response model for a task log entry (SDK message)."""
+    """Response model for a task log entry (raw session.jsonl message)."""
 
-    type: str
-    data: dict
+    model_config = {"extra": "allow"}  # Allow any additional fields
 
 
 class TaskLogListResponse(BaseModel):
@@ -159,13 +158,8 @@ def get_task_logs(
             detail=str(e),
         ) from e
 
-    log_responses = [
-        TaskLogResponse(
-            type=log.get("type", "unknown"),
-            data=log.get("data", {}),
-        )
-        for log in logs
-    ]
+    # Return raw log objects without transformation
+    log_responses = logs
 
     return TaskLogListResponse(
         logs=log_responses,
