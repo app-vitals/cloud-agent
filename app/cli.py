@@ -178,9 +178,7 @@ def get_logs(
         console.print("[yellow]No logs found[/yellow]")
         return
 
-    console.print(
-        f"[bold]Logs for task {task_id}[/bold] ({data['total']} messages)\n"
-    )
+    console.print(f"[bold]Logs for task {task_id}[/bold] ({data['total']} messages)\n")
 
     # Print raw logs as JSON for simplicity and future-proofing
     import json
