@@ -3,6 +3,7 @@
 import os
 import re
 import subprocess
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -168,18 +169,97 @@ def main():
         print("   ✗ Failed to get logs")
         print(f"   stderr: {stderr}\n")
 
-    # Final verdict - check task status from step 4
-    if "completed" in task_status_stdout.lower():
-        print("\n✓ Integration test PASSED!")
-        print("  All CLI commands worked correctly:")
-        print("  - task create")
-        print("  - task get")
-        print("  - task wait")
-        print("  - task logs")
-        return 0
-    else:
-        print("\n✗ Integration test FAILED - task did not complete")
+    # Test 6: Resume task
+    print("6. Resuming task to append to the file...")
+    resume_prompt = "Append a line to the file saying 'My favorite color is blue'"
+    exit_code, stdout, stderr = run_cli_command(
+        [
+            "uv",
+            "run",
+            "python",
+            "-m",
+            "app.cli",
+            "task",
+            "resume",
+            task_id,
+            resume_prompt,
+        ]
+    )
+
+    if exit_code != 0:
+        print("   ✗ Failed to resume task")
+        print(f"   stdout: {stdout}")
+        print(f"   stderr: {stderr}")
         return 1
+
+    # Extract resumed task ID
+    resume_match = re.search(r"Resumed task created: ([a-f0-9\-]+)", stdout)
+    if not resume_match:
+        print("   ✗ Could not extract resumed task ID")
+        return 1
+
+    resumed_task_id = resume_match.group(1)
+    print(f"   ✓ Resumed task created: {resumed_task_id}\n")
+
+    # Test 7: Wait for resumed task
+    print("7. Waiting for resumed task to complete...")
+    exit_code, stdout, stderr = run_cli_command(
+        [
+            "uv",
+            "run",
+            "python",
+            "-m",
+            "app.cli",
+            "task",
+            "wait",
+            resumed_task_id,
+            "--timeout",
+            str(TIMEOUT),
+        ],
+        timeout=TIMEOUT + 10,
+    )
+
+    if exit_code != 0:
+        print("   ✗ Resumed task did not complete")
+        print(f"   stdout: {stdout}")
+        print(f"   stderr: {stderr}")
+        return 1
+
+    print("   ✓ Resumed task completed successfully\n")
+
+    # Test 8: Verify file was updated
+    print("8. Verifying file restoration and session resumption...")
+    resumed_file = Path("logs/tasks") / resumed_task_id / "files" / "hello.txt"
+    if not resumed_file.exists():
+        print(f"   ✗ File not found: {resumed_file}")
+        return 1
+
+    content = resumed_file.read_text()
+
+    # Check for both original and appended content
+    has_original = "Hello World!" in content
+    has_appended = "My favorite color is blue" in content
+
+    if has_original and has_appended:
+        print("   ✓ File restoration worked (original content present)")
+        print("   ✓ Session resumption worked (appended new content)")
+        print(f"   Content:\n     {content.strip()}\n")
+    else:
+        print("   ✗ File content incorrect:")
+        print(f"     Has original: {has_original}")
+        print(f"     Has appended: {has_appended}")
+        print(f"   Content: {content}")
+        return 1
+
+    # Final verdict
+    print("\n✓ Integration test PASSED!")
+    print("  All CLI commands worked correctly:")
+    print("  - task create")
+    print("  - task get")
+    print("  - task wait")
+    print("  - task logs")
+    print("  - task resume (with session and file restoration)")
+    return 0
 
 
 if __name__ == "__main__":

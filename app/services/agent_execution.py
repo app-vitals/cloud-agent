@@ -1,6 +1,7 @@
 """Agent execution service with business logic."""
 
 import logging
+from pathlib import Path
 from uuid import UUID
 
 from app.services.sandbox import SandboxService
@@ -106,39 +107,55 @@ class AgentExecutionService:
 
             logger.info(f"Cloned repository {task.repository_url}")
 
-            # Create or checkout task branch
-            if task.branch_name:
-                # Resuming - checkout existing branch
-                branch_name = task.branch_name
-                logger.info(f"Checking out existing branch {branch_name}")
-                result = SandboxService.run_command(
-                    sandbox, f"cd /home/user/repo && git checkout {branch_name}"
+            # Restore files and session from parent task if resuming
+            resume_session_id = None
+            if task.parent_task_id:
+                logger.info(f"Resuming from parent task {task.parent_task_id}")
+                parent_task = TaskService.get_task_by_id(task.parent_task_id)
+                resume_session_id = parent_task.session_id
+
+                # Restore files from parent task
+                parent_files_dir = (
+                    Path("logs/tasks") / str(task.parent_task_id) / "files"
                 )
-                if result.exit_code != 0:
-                    error = f"Failed to checkout branch {branch_name}: {result.stderr}"
-                    logger.error(error)
-                    TaskService.update_task_status(task_id, "failed", result=error)
-                    return {"status": "failed", "error": error}
-            else:
-                # New task - create new branch
-                branch_name = f"ca/task/{task_id}"
-                logger.info(f"Creating branch {branch_name}")
-                result = SandboxService.run_command(
-                    sandbox, f"cd /home/user/repo && git checkout -b {branch_name}"
-                )
-                if result.exit_code != 0:
-                    error = f"Failed to create branch {branch_name}: {result.stderr}"
-                    logger.error(error)
-                    TaskService.update_task_status(task_id, "failed", result=error)
-                    return {"status": "failed", "error": error}
-                logger.info(f"Created and checked out branch {branch_name}")
+                if parent_files_dir.exists():
+                    logger.info(f"Restoring files from {parent_files_dir}")
+                    for file_path in parent_files_dir.rglob("*"):
+                        if file_path.is_file():
+                            relative_path = file_path.relative_to(parent_files_dir)
+                            content = file_path.read_text()
+                            sandbox.files.write(
+                                f"/home/user/repo/{relative_path}", content
+                            )
+                            logger.info(f"Restored file: {relative_path}")
+                else:
+                    logger.info("No files to restore from parent task")
+
+                # Restore session file for conversation resumption
+                if resume_session_id:
+                    parent_session_file = (
+                        Path("logs/tasks") / str(task.parent_task_id) / "session.jsonl"
+                    )
+                    if parent_session_file.exists():
+                        logger.info(f"Restoring session file for {resume_session_id}")
+                        session_content = parent_session_file.read_text()
+                        # Write to Claude's session directory
+                        session_dir = "/home/user/.claude/projects/-home-user-repo"
+                        sandbox.files.write(
+                            f"{session_dir}/{resume_session_id}.jsonl", session_content
+                        )
+                        logger.info("Restored session file to Claude's directory")
+                    else:
+                        logger.warning(
+                            f"No session file found at {parent_session_file}"
+                        )
 
             # Run agent with the prompt
             output = SandboxService.run_agent(
                 sandbox,
                 task_id=task_id,
                 prompt=task.prompt,
-                resume_session_id=task.session_id,  # Resume if session exists
+                resume_session_id=resume_session_id,
             )
 
             # Extract results
@@ -157,59 +174,46 @@ class AgentExecutionService:
                 status = "failed"
                 result = "Task failed - no result returned"
 
-            # Commit and push changes if task completed
+            # Extract files from sandbox if task completed
             if status == "completed":
-                logger.info(f"Committing and pushing changes for task {task_id}")
+                logger.info(f"Extracting files for task {task_id}")
 
-                # Stage all changes
-                SandboxService.run_command(sandbox, "cd /home/user/repo && git add -A")
-
-                # Check if there are changes to commit
+                # Check for any modified or new files
                 status_result = SandboxService.run_command(
                     sandbox, "cd /home/user/repo && git status --porcelain"
                 )
 
                 if status_result.stdout.strip():
-                    # Commit changes
-                    commit_msg = f"Task {task_id}: {task.prompt[:50]}"
-                    commit_result = SandboxService.run_command(
-                        sandbox, f'cd /home/user/repo && git commit -m "{commit_msg}"'
-                    )
+                    # Create task files directory
+                    task_dir = Path("logs/tasks") / str(task_id) / "files"
+                    task_dir.mkdir(parents=True, exist_ok=True)
 
-                    if commit_result.exit_code == 0:
-                        # Push to remote
-                        push_result = SandboxService.run_command(
-                            sandbox,
-                            f"cd /home/user/repo && git push -u origin {branch_name}",
-                        )
+                    # Extract each modified/new file
+                    for line in status_result.stdout.strip().split("\n"):
+                        # Parse file path (skip first 3 chars: status prefix)
+                        file_path = line[3:].strip()
 
-                        if push_result.exit_code == 0:
-                            logger.info(f"Successfully pushed branch {branch_name}")
-                        else:
-                            logger.warning(
-                                f"Failed to push branch: {push_result.stderr}"
-                            )
-                    else:
-                        logger.warning(
-                            f"Failed to commit changes: {commit_result.stderr}"
-                        )
+                        try:
+                            # Read file from sandbox
+                            content = sandbox.files.read(f"/home/user/repo/{file_path}")
+
+                            # Save locally preserving directory structure
+                            local_file = task_dir / file_path
+                            local_file.parent.mkdir(parents=True, exist_ok=True)
+                            local_file.write_text(content)
+
+                            logger.info(f"Extracted file: {file_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to extract {file_path}: {e}")
+
+                    logger.info(f"Extracted files to {task_dir}")
                 else:
-                    logger.info("No changes to commit")
+                    logger.info("No files to extract")
 
             # Update task with final status
-            # Only persist branch_name and session_id if task completed successfully
-            if status == "completed":
-                TaskService.update_task_status(
-                    task_id,
-                    status,
-                    result=result,
-                    session_id=session_id,
-                    branch_name=branch_name,
-                )
-            else:
-                TaskService.update_task_status(
-                    task_id, status, result=result, session_id=session_id
-                )
+            TaskService.update_task_status(
+                task_id, status, result=result, session_id=session_id
+            )
 
             logger.info(f"Task {task_id} completed with status {status}")
             return {"status": status, "session_id": session_id}

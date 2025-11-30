@@ -18,9 +18,12 @@ os.environ["APP_ENV"] = "test"
 def create_test_task(
     prompt: str = "Test task prompt",
     repository_url: str = "https://github.com/test/repo.git",
+    parent_task_id=None,
 ) -> Task:
     """Helper function to create a test task with default values."""
-    return TaskService.create_task(prompt=prompt, repository_url=repository_url)
+    return TaskService.create_task(
+        prompt=prompt, repository_url=repository_url, parent_task_id=parent_task_id
+    )
 
 
 @pytest.fixture(autouse=True, scope="function")

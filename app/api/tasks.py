@@ -18,21 +18,20 @@ class TaskCreate(BaseModel):
 
     prompt: str
     repository_url: str
-    session_id: str | None = None
-    branch_name: str | None = None
+    parent_task_id: UUID | None = None
 
 
 class TaskResponse(BaseModel):
     """Response model for task data."""
 
-    id: str
+    id: UUID
     prompt: str
     repository_url: str
     status: str
     result: str | None
     sandbox_id: str | None
     session_id: str | None
-    branch_name: str | None
+    parent_task_id: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -67,18 +66,17 @@ def create_task(task_data: TaskCreate, api_key: str = Depends(verify_api_key)):
     task = TaskService.create_task(
         prompt=task_data.prompt,
         repository_url=task_data.repository_url,
-        session_id=task_data.session_id,
-        branch_name=task_data.branch_name,
+        parent_task_id=task_data.parent_task_id,
     )
 
     return TaskResponse(
-        id=str(task.id),
+        id=task.id,
         prompt=task.prompt,
         status=task.status,
         result=task.result,
         sandbox_id=task.sandbox_id,
         session_id=task.session_id,
-        branch_name=task.branch_name,
+        parent_task_id=task.parent_task_id,
         repository_url=task.repository_url,
         created_at=task.created_at,
         updated_at=task.updated_at,
@@ -97,13 +95,13 @@ def get_task(task_id: UUID, api_key: str = Depends(verify_api_key)):
         ) from e
 
     return TaskResponse(
-        id=str(task.id),
+        id=task.id,
         prompt=task.prompt,
         status=task.status,
         result=task.result,
         sandbox_id=task.sandbox_id,
         session_id=task.session_id,
-        branch_name=task.branch_name,
+        parent_task_id=task.parent_task_id,
         repository_url=task.repository_url,
         created_at=task.created_at,
         updated_at=task.updated_at,
@@ -119,13 +117,13 @@ def list_tasks(
 
     task_responses = [
         TaskResponse(
-            id=str(task.id),
+            id=task.id,
             prompt=task.prompt,
             status=task.status,
             result=task.result,
             sandbox_id=task.sandbox_id,
             session_id=task.session_id,
-            branch_name=task.branch_name,
+            parent_task_id=task.parent_task_id,
             repository_url=task.repository_url,
             created_at=task.created_at,
             updated_at=task.updated_at,

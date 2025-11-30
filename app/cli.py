@@ -59,6 +59,37 @@ def create_task(
         console.print(f"  Branch: [cyan]{task['branch_name']}[/cyan]")
 
 
+@task_app.command("resume")
+def resume_task(
+    parent_task_id: str = typer.Argument(..., help="Parent task ID to resume from"),
+    prompt: str = typer.Argument(..., help="Natural language prompt for continuation"),
+):
+    """Resume a task from a previous task."""
+    # Get parent task to get repository URL
+    with get_client() as client:
+        response = client.get(f"/v1/tasks/{parent_task_id}")
+        response.raise_for_status()
+        parent_task = response.json()
+
+    # Create new task with parent_task_id
+    with get_client() as client:
+        response = client.post(
+            "/v1/tasks",
+            json={
+                "prompt": prompt,
+                "repository_url": parent_task["repository_url"],
+                "parent_task_id": parent_task_id,
+            },
+        )
+        response.raise_for_status()
+        task = response.json()
+
+    console.print(f"[green]✓[/green] Resumed task created: [bold]{task['id']}[/bold]")
+    console.print(f"  Parent: [dim]{parent_task_id}[/dim]")
+    console.print(f"  Status: {task['status']}")
+    console.print(f"  Repository: {task['repository_url']}")
+
+
 @task_app.command("list")
 def list_tasks(
     limit: int = typer.Option(10, "--limit", "-n", help="Number of tasks to show"),

@@ -23,8 +23,7 @@ class TaskService:
     def create_task(
         prompt: str,
         repository_url: str,
-        session_id: str | None = None,
-        branch_name: str | None = None,
+        parent_task_id: UUID | None = None,
     ) -> Task:
         """Create a new task and queue it for execution."""
         with get_session() as session:
@@ -32,8 +31,7 @@ class TaskService:
                 prompt=prompt,
                 repository_url=repository_url,
                 status="pending",
-                session_id=session_id,
-                branch_name=branch_name,
+                parent_task_id=parent_task_id,
             )
             session.add(task)
             session.commit()
@@ -85,7 +83,6 @@ class TaskService:
         result: str | None = None,
         sandbox_id: str | None = None,
         session_id: str | None = None,
-        branch_name: str | None = None,
     ) -> Task:
         """Update task status and result."""
         with get_session() as session:
@@ -103,8 +100,6 @@ class TaskService:
                 task.sandbox_id = sandbox_id
             if session_id is not None:
                 task.session_id = session_id
-            if branch_name is not None:
-                task.branch_name = branch_name
 
             session.add(task)
             session.commit()

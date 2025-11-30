@@ -47,8 +47,10 @@ class Task(SQLModel, table=True):
     session_id: str | None = Field(
         default=None, description="Claude session ID for resumption"
     )
-    branch_name: str | None = Field(
-        default=None, description="Git branch name where task outputs are stored"
+    parent_task_id: UUID | None = Field(
+        default=None,
+        foreign_key="tasks.id",
+        description="Parent task ID to resume from",
     )
     repository_url: str = Field(
         description="GitHub repository URL to clone and work on"
