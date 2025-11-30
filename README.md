@@ -7,6 +7,9 @@ Cloud-hosted agent service that executes AI-powered development tasks in isolate
 - **Natural language interface**: No predefined task types - just describe what you want
 - **Powered by Claude Code**: Full agent capabilities for any development task
 - **Secure sandboxing**: Each task runs in isolated Novita sandbox
+- **CLI Tool**: `ca` command for managing tasks (create, get, logs, wait, resume)
+- **Task Resumption**: Continue from previous tasks with full conversation context
+- **File Extraction**: Modified files automatically saved locally for review
 - **Simple API**: Submit prompt, get task ID, poll for results
 
 ## Quick Start
@@ -131,18 +134,34 @@ This enables Claude Code to execute complex prompts like:
 - "Set up Redis caching for the API endpoints"
 - "Create a full-stack feature with database, service layer, and tests"
 
-## Example Use Cases
+## Usage
+
+### CLI Tool
 
 ```bash
-# Create a simple file
-curl -X POST http://localhost:8000/v1/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Create a hello.txt file with Hello World",
-    "repository_url": "https://github.com/anthropics/anthropic-sdk-python.git"
-  }'
+# Create a task
+ca task create "Fix the bug in auth module" --repo https://github.com/myorg/myapp.git
 
-# Fix a GitHub issue
+# Wait for completion
+ca task wait <task-id>
+
+# Get task details and results
+ca task get <task-id>
+
+# View execution logs
+ca task logs <task-id>
+
+# Resume from a previous task
+ca task resume <parent-task-id> "Continue by adding tests for the fix"
+
+# Review a pull request
+ca pr review 123 --repo myorg/myapp
+```
+
+### API Examples
+
+```bash
+# Create a task
 curl -X POST http://localhost:8000/v1/tasks \
   -H "Content-Type: application/json" \
   -d '{
@@ -150,16 +169,11 @@ curl -X POST http://localhost:8000/v1/tasks \
     "repository_url": "https://github.com/myorg/myapp.git"
   }'
 
-# Add a new feature with tests
-curl -X POST http://localhost:8000/v1/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Add a users table with SQLModel, create CRUD service with tests",
-    "repository_url": "https://github.com/myorg/myapp.git"
-  }'
-
 # Check task status
 curl http://localhost:8000/v1/tasks/{task_id}
+
+# Get task logs
+curl http://localhost:8000/v1/tasks/{task_id}/logs
 ```
 
 ## Documentation
