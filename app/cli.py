@@ -55,6 +55,9 @@ def create_task(
     console.print(f"  Status: {task['status']}")
     console.print(f"  Repository: {task['repository_url']}")
 
+    if task.get("branch_name"):
+        console.print(f"  Branch: [cyan]{task['branch_name']}[/cyan]")
+
 
 @task_app.command("list")
 def list_tasks(
@@ -105,6 +108,13 @@ def get_task(task_id: str = typer.Argument(..., help="Task ID")):
     console.print(f"  Status: {task['status']}")
     console.print(f"  Repository: {task['repository_url']}")
     console.print(f"  Created: {task['created_at']}")
+
+    if task.get("branch_name"):
+        console.print(f"  Branch: [cyan]{task['branch_name']}[/cyan]")
+
+    if task.get("session_id"):
+        console.print(f"  Session: {task['session_id'][:8]}...")
+
     console.print(f"\n[bold]Prompt:[/bold]\n{task['prompt']}")
 
     if task.get("result"):
@@ -114,11 +124,10 @@ def get_task(task_id: str = typer.Argument(..., help="Task ID")):
 @task_app.command("logs")
 def get_logs(
     task_id: str = typer.Argument(..., help="Task ID"),
-    limit: int = typer.Option(100, "--limit", "-n", help="Number of log lines"),
 ):
     """Get task logs."""
     with get_client() as client:
-        response = client.get(f"/v1/tasks/{task_id}/logs", params={"limit": limit})
+        response = client.get(f"/v1/tasks/{task_id}/logs")
         response.raise_for_status()
         data = response.json()
 
@@ -128,10 +137,33 @@ def get_logs(
         console.print("[yellow]No logs found[/yellow]")
         return
 
-    console.print(f"[bold]Logs for task {task_id[:8]}[/bold] (showing {len(logs)} of {data['total']})")
+    console.print(f"[bold]Logs for task {task_id[:8]}[/bold] ({data['total']} messages)")
+
     for log in logs:
-        color = "red" if log["stream"] == "stderr" else "white"
-        console.print(f"[{color}]{log['content']}[/{color}]")
+        msg_type = log.get("type", "unknown")
+
+        # Color code by message type
+        if msg_type == "SystemMessage":
+            color = "cyan"
+            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
+        elif msg_type == "AssistantMessage":
+            color = "green"
+            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
+        elif msg_type == "UserMessage":
+            color = "blue"
+            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
+        elif msg_type == "ResultMessage":
+            color = "magenta"
+            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
+        else:
+            color = "white"
+            console.print(f"\n[{color}]▸ {msg_type}[/{color}]")
+
+        # Print data (simplified - just show first 200 chars)
+        data_str = str(log.get("data", {}))
+        if len(data_str) > 200:
+            data_str = data_str[:200] + "..."
+        console.print(f"  {data_str}")
 
 
 @task_app.command("wait")

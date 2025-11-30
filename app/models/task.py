@@ -44,6 +44,12 @@ class Task(SQLModel, table=True):
     sandbox_id: str | None = Field(
         default=None, description="ID of the sandbox where the task is running"
     )
+    session_id: str | None = Field(
+        default=None, description="Claude session ID for resumption"
+    )
+    branch_name: str | None = Field(
+        default=None, description="Git branch name where task outputs are stored"
+    )
     repository_url: str = Field(
         description="GitHub repository URL to clone and work on"
     )

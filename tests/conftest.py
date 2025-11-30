@@ -55,4 +55,5 @@ def test_client():
 @pytest.fixture(scope="function")
 def auth_headers():
     """Provide authentication headers for API requests."""
-    return {"X-API-Key": "dev-secret-key"}
+    from app.core.config import settings
+    return {"X-API-Key": settings.api_secret_key}

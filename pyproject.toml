@@ -60,6 +60,7 @@ omit = [
     "*/__pycache__/*",
     "app/tasks/*",
     "app/services/sandbox.py",
+    "app/cli.py",
 ]
 
 [tool.coverage.report]

@@ -612,38 +612,69 @@ cloud-agent/
 - ✅ Claude-toolkit integration - provides `/review-pr` commands
 - ✅ OAuth token support merged
 - ✅ Successful end-to-end PR review test (ok-wow/ok-wow-ai#633)
-- 🚧 Next: Migrate from CLI wrapper to Agent SDK
+- ✅ **All SDK tests passed** - Ready for implementation!
+- 🚧 Next: Implement SDK integration in production code
 
 **Agent SDK Migration** (Priority):
 Switching from `claude` CLI wrapper to `claude-agent-sdk` Python library for:
 - ✅ **No prompt escaping** - proper API instead of bash escaping hacks
-- ✅ **Session management** - `ClaudeSDKClient` with `resume` parameter
+- ✅ **Session management** - Copy .jsonl files for resumption across sandboxes
 - ✅ **Structured responses** - typed Message objects vs parsing JSON streams
 - ✅ **Better error handling** - production-ready with built-in monitoring
-- ✅ **Branch creation + file retrieval** - push task outputs to git branches
-- ✅ **Session resumption** - resume tasks locally or in new sandboxes
+- ✅ **Complete logging** - All tool calls (ToolUseBlock, ToolResultBlock) captured
+- ✅ **Real-time streaming** - on_stdout/on_stderr callbacks for live progress
+- ✅ **Permission bypass** - No prompts with `permission_mode="bypassPermissions"`
 
 **Approach**: Migrate to SDK, then add scheduling
-1. **Phase 3.5a**: Migrate to Agent SDK with branch-based output
+1. **Phase 3.5a**: Migrate to Agent SDK with branch-based output ← **WE ARE HERE**
 2. **Phase 3.5b**: Add Celery Beat scheduling once workflow proven
+
+## Testing Complete ✅
+
+Ran 6 comprehensive tests - all passed! See `SDK_MIGRATION_PLAN.md` for details.
+
+| Test | Feature | Status | Key Finding |
+|------|---------|--------|-------------|
+| 1 | Basic SDK in sandbox | ✅ | No escaping, clean JSON I/O |
+| 2 | Session resumption | ✅ | Works by copying .jsonl file |
+| 3 | Bash timeout | ✅ | Exit 124, captures partial logs |
+| 4 | E2B timeout | ✅ | Cleaner, captures partial logs |
+| 5 | Real-time streaming | ✅ | on_stdout/stderr callbacks work |
+| 6 | Permission bypass | ✅ | No prompts needed |
 
 **Tasks:**
 
-- [ ] **Migrate to Agent SDK** (Phase 3.5a - Priority)
-  - [ ] Install `claude-agent-sdk` in sandbox template
-  - [ ] Replace `SandboxService.run_claude_code()` with SDK `query()`
-  - [ ] Add branch creation for every task (`task/<task-id>`)
-  - [ ] Commit and push task outputs before sandbox cleanup
-  - [ ] Store branch name and session_id with task
+- ✅ **Test Agent SDK** (Complete!)
+  - ✅ Created `scripts/sandbox_agent.py` - UV script for sandbox
+  - ✅ Created 6 test scripts validating all features
+  - ✅ Confirmed no prompt escaping needed
+  - ✅ Validated session resumption (copy .jsonl files)
+  - ✅ Tested timeout handling (E2B timeout preferred)
+  - ✅ Verified real-time streaming works
+  - ✅ Confirmed permission bypass mode works
+  - ✅ Validated complete tool call logging
+
+- [ ] **Implement SDK Integration** (Next - Ready to Start!)
+  - [ ] Add `SandboxService.run_agent()` method
+  - [ ] Update `AgentExecutionService` to use `run_agent()`
+  - [ ] Add `session_id` and `session_data` (TEXT/JSONB) to Task model
+  - [ ] Create database migration for new fields
+  - [ ] Update log storage to handle SDK message format
+  - [ ] Add streaming callbacks for real-time log capture
+  - [ ] Handle TimeoutException and capture partial logs
+  - [ ] Test end-to-end with PR review workflow
+
+- [ ] **Add Branch Creation** (After SDK works)
+  - [ ] Add `branch_name` field to Task model
+  - [ ] Create branch at start: `task/{task_id}`
+  - [ ] Commit all changes before sandbox cleanup
+  - [ ] Push to remote repository
   - [ ] Update CLI to show branch info after task creation
-  - [ ] Test session resumption with `ClaudeSDKClient` + `resume` parameter
-  - [ ] Remove prompt escaping complexity from `run_claude_code()`
-  - [ ] Update tests for SDK integration
 
 - [ ] **Iterate on PR review workflow** (Phase 3.5a)
-  - [ ] Review PR_REVIEW_633.md output from test run
-  - [ ] Refine prompts for concise, actionable feedback
-  - [ ] Test with multiple PRs to validate approach
+  - [ ] Test with real PRs after SDK migration
+  - [ ] Verify branches contain expected output files
+  - [ ] Test `ca task show <id>` to fetch branch locally
   - [ ] Add support for retrieving files from branch locally
 
 - [ ] **Add Celery Beat scheduler** (Phase 3.5b - after SDK migration)

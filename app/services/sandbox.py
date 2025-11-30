@@ -1,9 +1,12 @@
 """Sandbox service for Novita sandbox operations."""
 
+import json
 import logging
 import os
+from pathlib import Path
+from uuid import UUID
 
-from e2b.sandbox.commands.command_handle import CommandExitException
+from e2b import CommandExitException, TimeoutException
 from e2b_code_interpreter import Sandbox
 
 from app.core.config import settings
@@ -26,12 +29,12 @@ class SandboxService:
         os.environ["E2B_API_KEY"] = settings.novita_api_key or ""
         os.environ["E2B_DOMAIN"] = "sandbox.novita.ai"
 
-        # Use system keys as fallback
-        final_anthropic_key = anthropic_api_key or settings.system_anthropic_api_key
+        # Use settings as fallback
+        final_anthropic_key = anthropic_api_key or settings.anthropic_api_key
         final_claude_code_oauth_token = (
-            claude_code_oauth_token or settings.system_claude_code_oauth_token
+            claude_code_oauth_token or settings.claude_code_oauth_token
         )
-        final_github_token = github_token or settings.system_github_token
+        final_github_token = github_token or settings.github_token
 
         if not final_anthropic_key and not final_claude_code_oauth_token:
             raise ValueError(
@@ -106,68 +109,105 @@ class SandboxService:
             )
 
     @staticmethod
-    def run_claude_code(
-        sandbox: Sandbox, prompt: str, timeout: int | None = None
-    ) -> tuple[int, str, str]:
-        """Run Claude Code with the given prompt.
+    def run_agent(
+        sandbox: Sandbox,
+        task_id: UUID,
+        prompt: str,
+        resume_session_id: str | None = None,
+        timeout: int | None = None,
+    ) -> dict:
+        """Run agent task using Claude Agent SDK.
 
         Args:
             sandbox: The Novita sandbox instance
-            prompt: The prompt to send to Claude Code
+            task_id: UUID of the task (for filesystem storage)
+            prompt: The prompt to send to the agent
+            resume_session_id: Optional session ID to resume from
             timeout: Command timeout in seconds (None = use default from settings)
 
         Returns:
-            Tuple of (exit_code, stdout, stderr)
+            Dict with keys:
+                - session_id: Claude session ID for resumption
+                - result: Final result from agent
+                - cost: Total cost in USD
+                - duration_ms: Duration in milliseconds
+                - num_turns: Number of conversation turns
+                - timed_out: True if task timed out
+                - logs: List of message log entries
         """
         # Use default timeout from settings if not provided
         if timeout is None:
             timeout = settings.claude_code_timeout
 
-        # Escape for bash -c with double quotes:
-        # Need to escape: double quotes, dollar signs, backticks, and backslashes
-        # Single quotes are safe inside double quotes and don't need escaping
-        escaped_prompt = (
-            prompt.replace("\\", "\\\\")  # Escape backslashes first
-            .replace('"', '\\"')  # Escape double quotes
-            .replace("$", "\\$")  # Escape dollar signs
-            .replace("`", "\\`")  # Escape backticks
-        )
-
-        # Build Claude command with timeout
-        # -p/--print: non-interactive mode (skips workspace trust dialog)
-        # --dangerously-skip-permissions: bypass all permission checks (safe in sandbox)
-        # --verbose --output-format stream-json: get structured output with logs
-        # timeout command: kills process after specified seconds, sends SIGTERM then SIGKILL
-        # Using bash -c with double quotes to avoid complex single quote escaping
-        claude_command = (
-            f"cd /home/user/repo && "
-            f'timeout {timeout} bash -c "echo \\"{escaped_prompt}\\" | '
-            f'claude -p --dangerously-skip-permissions --verbose --output-format stream-json"'
-        )
-
         logger.info(
-            f"Running Claude Code with prompt: {prompt[:100]}... (timeout: {timeout}s)"
+            f"Running agent task {task_id} with prompt: {prompt[:100]}... (timeout: {timeout}s)"
         )
 
-        # Use a long timeout for sandbox.commands.run since we're handling timeout with bash
+        # Read sandbox_agent.py script content
+        script_path = Path(__file__).parent.parent.parent / "scripts" / "sandbox_agent.py"
+        script_content = script_path.read_text()
+
+        # Write script to sandbox
+        sandbox.files.write("/tmp/sandbox_agent.py", script_content)
+
+        # Write task input
+        task_input = {"prompt": prompt}
+        if resume_session_id:
+            task_input["resume_session_id"] = resume_session_id
+        sandbox.files.write("/tmp/task_input.json", json.dumps(task_input))
+
+        # Run agent with timeout
+        timed_out = False
         try:
-            result = sandbox.commands.run(claude_command, timeout=timeout + 30)
+            result = sandbox.commands.run(
+                "cd /home/user/repo && uv run /tmp/sandbox_agent.py",
+                timeout=timeout
+            )
             exit_code = result.exit_code
-            stdout = result.stdout
-            stderr = result.stderr
-        except CommandExitException as e:
-            # E2B raises exception for non-zero exit codes, but we can still get the output
-            exit_code = e.exit_code
-            stdout = e.stdout if hasattr(e, "stdout") else ""
-            stderr = e.stderr if hasattr(e, "stderr") else str(e)
-            logger.info(f"Claude Code exited with non-zero code {exit_code}")
+            logger.info(f"Agent task {task_id} completed with exit code {exit_code}")
+        except TimeoutException:
+            logger.warning(f"Agent task {task_id} timed out after {timeout}s")
+            timed_out = True
+        except Exception as e:
+            logger.error(f"Agent task {task_id} failed with exception: {e}")
+            raise
 
-        logger.info(f"Claude Code completed with exit code {exit_code}")
+        # Read outputs from sandbox (exist even if timed out due to progressive flushing)
+        try:
+            output_json = sandbox.files.read("/tmp/task_output.json")
+            output = json.loads(output_json)
+        except Exception as e:
+            logger.error(f"Failed to read task output: {e}")
+            output = {
+                "session_id": None,
+                "result": f"Error: Failed to read output - {e}",
+                "cost": 0,
+                "duration_ms": 0,
+                "num_turns": 0,
+            }
 
-        # Exit code 124 means timeout killed the process
-        if exit_code == 124:
-            error_msg = f"Claude Code timed out after {timeout}s"
-            logger.warning(error_msg)
-            return 124, stdout, stderr + f"\n\n{error_msg}"
+        # Store session file (serves as logs - no separate log file needed!)
+        task_dir = Path("logs/tasks") / str(task_id)
+        task_dir.mkdir(parents=True, exist_ok=True)
 
-        return exit_code, stdout, stderr
+        session_id = output.get("session_id")
+        if session_id:
+            try:
+                # Session files are in ~/.claude/projects/<normalized-path>/{session_id}.jsonl
+                # The repo is cloned to /home/user/repo
+                session_file_path = f"/home/user/.claude/projects/-home-user-repo/{session_id}.jsonl"
+                session_jsonl = sandbox.files.read(session_file_path)
+                (task_dir / "session.jsonl").write_text(session_jsonl)
+                logger.info(f"Stored session file for task {task_id}")
+            except Exception as e:
+                logger.warning(f"Failed to store session file: {e}")
+                # Create empty session file if not found
+                (task_dir / "session.jsonl").write_text("")
+        else:
+            # No session created (likely errored early), create empty file
+            (task_dir / "session.jsonl").write_text("")
+
+        # Add timed_out flag to output
+        output["timed_out"] = timed_out
+
+        return output

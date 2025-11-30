@@ -107,27 +107,110 @@ class AgentExecutionService:
 
             logger.info(f"Cloned repository {task.repository_url}")
 
-            # Run Claude Code with the prompt
-            exit_code, stdout, stderr = SandboxService.run_claude_code(
-                sandbox, task.prompt
+            # Create or checkout task branch
+            if task.branch_name:
+                # Resuming - checkout existing branch
+                branch_name = task.branch_name
+                logger.info(f"Checking out existing branch {branch_name}")
+                result = SandboxService.run_command(
+                    sandbox, f"cd /home/user/repo && git checkout {branch_name}"
+                )
+                if result.exit_code != 0:
+                    error = f"Failed to checkout branch {branch_name}: {result.stderr}"
+                    logger.error(error)
+                    TaskService.update_task_status(task_id, "failed", result=error)
+                    return {"status": "failed", "error": error}
+            else:
+                # New task - create new branch
+                branch_name = f"ca/task/{task_id}"
+                logger.info(f"Creating branch {branch_name}")
+                result = SandboxService.run_command(
+                    sandbox, f"cd /home/user/repo && git checkout -b {branch_name}"
+                )
+                if result.exit_code != 0:
+                    error = f"Failed to create branch {branch_name}: {result.stderr}"
+                    logger.error(error)
+                    TaskService.update_task_status(task_id, "failed", result=error)
+                    return {"status": "failed", "error": error}
+                logger.info(f"Created and checked out branch {branch_name}")
+
+            # Run agent with the prompt
+            output = SandboxService.run_agent(
+                sandbox,
+                task_id=task_id,
+                prompt=task.prompt,
+                resume_session_id=task.session_id,  # Resume if session exists
             )
 
-            # Store logs from execution
-            TaskService.store_task_logs(task_id, stdout, stderr)
+            # Extract results
+            session_id = output.get("session_id")
+            agent_result = output.get("result")
+            timed_out = output.get("timed_out", False)
 
             # Determine final status
-            if exit_code == 0:
+            if timed_out:
+                status = "failed"
+                result = f"Task timed out. Partial result: {agent_result or 'None'}"
+            elif agent_result:
                 status = "completed"
-                result = "Task completed successfully"
+                result = agent_result
             else:
                 status = "failed"
-                result = f"Task failed with exit code {exit_code}"
+                result = "Task failed - no result returned"
+
+            # Commit and push changes if task completed
+            if status == "completed":
+                logger.info(f"Committing and pushing changes for task {task_id}")
+
+                # Stage all changes
+                SandboxService.run_command(sandbox, "cd /home/user/repo && git add -A")
+
+                # Check if there are changes to commit
+                status_result = SandboxService.run_command(
+                    sandbox, "cd /home/user/repo && git status --porcelain"
+                )
+
+                if status_result.stdout.strip():
+                    # Commit changes
+                    commit_msg = f"Task {task_id}: {task.prompt[:50]}"
+                    commit_result = SandboxService.run_command(
+                        sandbox,
+                        f'cd /home/user/repo && git commit -m "{commit_msg}"'
+                    )
+
+                    if commit_result.exit_code == 0:
+                        # Push to remote
+                        push_result = SandboxService.run_command(
+                            sandbox,
+                            f"cd /home/user/repo && git push -u origin {branch_name}"
+                        )
+
+                        if push_result.exit_code == 0:
+                            logger.info(f"Successfully pushed branch {branch_name}")
+                        else:
+                            logger.warning(f"Failed to push branch: {push_result.stderr}")
+                    else:
+                        logger.warning(f"Failed to commit changes: {commit_result.stderr}")
+                else:
+                    logger.info("No changes to commit")
 
             # Update task with final status
-            TaskService.update_task_status(task_id, status, result=result)
+            # Only persist branch_name and session_id if task completed successfully
+            if status == "completed":
+                TaskService.update_task_status(
+                    task_id,
+                    status,
+                    result=result,
+                    session_id=session_id,
+                    branch_name=branch_name,
+                )
+            else:
+                TaskService.update_task_status(
+                    task_id, status, result=result, session_id=session_id
+                )
 
             logger.info(f"Task {task_id} completed with status {status}")
-            return {"status": status, "exit_code": exit_code}
+            return {"status": status, "session_id": session_id}
 
         finally:
             # Clean up sandbox

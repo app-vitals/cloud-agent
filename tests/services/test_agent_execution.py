@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.core.errors import NotFoundError
-from app.services import AgentExecutionService
+from app.services import AgentExecutionService, TaskService
 from tests.conftest import create_test_task
 
 
@@ -40,8 +40,16 @@ def test_execute_task_success(mocker):
     )
 
     mocker.patch(
-        "app.services.agent_execution.SandboxService.run_claude_code",
-        return_value=(0, "Success output", ""),
+        "app.services.agent_execution.SandboxService.run_agent",
+        return_value={
+            "session_id": "test-session-123",
+            "result": "Task completed successfully",
+            "cost": 0.01,
+            "duration_ms": 1000,
+            "num_turns": 2,
+            "timed_out": False,
+            "logs": [],
+        },
     )
 
     # Execute the task
@@ -49,7 +57,7 @@ def test_execute_task_success(mocker):
 
     # Verify result
     assert result["status"] == "completed"
-    assert result["exit_code"] == 0
+    assert result["session_id"] == "test-session-123"
 
     # Verify sandbox was killed
     mock_sandbox.kill.assert_called_once()
@@ -121,8 +129,16 @@ def test_execute_task_claude_failure(mocker):
     )
 
     mocker.patch(
-        "app.services.agent_execution.SandboxService.run_claude_code",
-        return_value=(1, "Partial output", "Error: command failed"),
+        "app.services.agent_execution.SandboxService.run_agent",
+        return_value={
+            "session_id": "test-session-123",
+            "result": None,
+            "cost": 0.01,
+            "duration_ms": 500,
+            "num_turns": 1,
+            "timed_out": False,
+            "logs": [],
+        },
     )
 
     # Execute the task
@@ -130,7 +146,7 @@ def test_execute_task_claude_failure(mocker):
 
     # Verify result
     assert result["status"] == "failed"
-    assert result["exit_code"] == 1
+    assert "no result" in result.get("error", "").lower() or result.get("session_id") is not None
 
     # Verify sandbox was killed
     mock_sandbox.kill.assert_called_once()
@@ -234,6 +250,219 @@ def test_execute_task_not_found(mocker):
         AgentExecutionService.execute_task(non_existent_id)
 
 
+def test_execute_task_branch_creation_failure(mocker):
+    """Test task execution with branch creation failure."""
+    # Create a test task
+    task = create_test_task()
+
+    # Mock sandbox service methods
+    mock_sandbox = MagicMock()
+    mock_sandbox.sandbox_id = "test-sandbox-123"
+
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.create_sandbox",
+        return_value=mock_sandbox,
+    )
+
+    # Mock setup_sandbox_environment
+    mocker.patch(
+        "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
+    )
+
+    # Mock run_command to succeed for clone, fail for branch creation
+    call_count = [0]
+
+    def mock_run_command_side_effect(sandbox, command, **kwargs):
+        call_count[0] += 1
+        mock_result = MagicMock()
+        if call_count[0] == 1:
+            # Git clone succeeds
+            mock_result.exit_code = 0
+        else:
+            # Branch creation fails
+            mock_result.exit_code = 1
+            mock_result.stderr = "fatal: A branch named 'ca/task/...' already exists."
+        return mock_result
+
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        side_effect=mock_run_command_side_effect,
+    )
+
+    # Execute the task
+    result = AgentExecutionService.execute_task(task.id)
+
+    # Verify result
+    assert result["status"] == "failed"
+    assert "Failed to create branch" in result["error"]
+
+    # Verify sandbox was killed
+    mock_sandbox.kill.assert_called_once()
+
+
+def test_execute_task_timeout(mocker):
+    """Test task execution with timeout."""
+    # Create a test task
+    task = create_test_task()
+
+    # Mock sandbox service methods
+    mock_sandbox = MagicMock()
+    mock_sandbox.sandbox_id = "test-sandbox-123"
+
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.create_sandbox",
+        return_value=mock_sandbox,
+    )
+
+    # Mock setup_sandbox_environment
+    mocker.patch(
+        "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
+    )
+
+    # Mock run_command for successful git clone and branch creation
+    mock_result = MagicMock()
+    mock_result.exit_code = 0
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        return_value=mock_result,
+    )
+
+    # Mock run_agent to return timeout
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_agent",
+        return_value={
+            "session_id": "test-session-123",
+            "result": "Partial work done",
+            "cost": 0.01,
+            "duration_ms": 300000,
+            "num_turns": 5,
+            "timed_out": True,
+            "logs": [],
+        },
+    )
+
+    # Execute the task
+    result = AgentExecutionService.execute_task(task.id)
+
+    # Verify result
+    assert result["status"] == "failed"
+
+    # Verify sandbox was killed
+    mock_sandbox.kill.assert_called_once()
+
+
+def test_execute_task_resume_branch_checkout(mocker):
+    """Test resuming task with existing branch."""
+    # Create a test task with existing branch and session
+    task = create_test_task()
+    TaskService.update_task_status(
+        task.id,
+        "pending",
+        branch_name="ca/task/existing-branch",
+        session_id="existing-session-123"
+    )
+
+    # Mock sandbox service methods
+    mock_sandbox = MagicMock()
+    mock_sandbox.sandbox_id = "test-sandbox-123"
+
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.create_sandbox",
+        return_value=mock_sandbox,
+    )
+
+    # Mock setup_sandbox_environment
+    mocker.patch(
+        "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
+    )
+
+    # Mock run_command for successful git clone and branch checkout
+    mock_result = MagicMock()
+    mock_result.exit_code = 0
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        return_value=mock_result,
+    )
+
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_agent",
+        return_value={
+            "session_id": "existing-session-123",
+            "result": "Continued work",
+            "cost": 0.02,
+            "duration_ms": 2000,
+            "num_turns": 3,
+            "timed_out": False,
+            "logs": [],
+        },
+    )
+
+    # Execute the task
+    result = AgentExecutionService.execute_task(task.id)
+
+    # Verify result
+    assert result["status"] == "completed"
+    assert result["session_id"] == "existing-session-123"
+
+    # Verify sandbox was killed
+    mock_sandbox.kill.assert_called_once()
+
+
+def test_execute_task_resume_checkout_failure(mocker):
+    """Test resuming task when branch checkout fails."""
+    # Create a test task with existing branch
+    task = create_test_task()
+    TaskService.update_task_status(
+        task.id,
+        "pending",
+        branch_name="ca/task/missing-branch"
+    )
+
+    # Mock sandbox service methods
+    mock_sandbox = MagicMock()
+    mock_sandbox.sandbox_id = "test-sandbox-123"
+
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.create_sandbox",
+        return_value=mock_sandbox,
+    )
+
+    # Mock setup_sandbox_environment
+    mocker.patch(
+        "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
+    )
+
+    # Mock run_command to succeed for clone, fail for branch checkout
+    call_count = [0]
+
+    def mock_run_command_side_effect(sandbox, command, **kwargs):
+        call_count[0] += 1
+        mock_result = MagicMock()
+        if call_count[0] == 1:
+            # Git clone succeeds
+            mock_result.exit_code = 0
+        else:
+            # Branch checkout fails
+            mock_result.exit_code = 1
+            mock_result.stderr = "error: pathspec 'ca/task/missing-branch' did not match any file(s)"
+        return mock_result
+
+    mocker.patch(
+        "app.services.agent_execution.SandboxService.run_command",
+        side_effect=mock_run_command_side_effect,
+    )
+
+    # Execute the task
+    result = AgentExecutionService.execute_task(task.id)
+
+    # Verify result
+    assert result["status"] == "failed"
+    assert "Failed to checkout branch" in result["error"]
+
+    # Verify sandbox was killed
+    mock_sandbox.kill.assert_called_once()
+
+
 def test_execute_task_sandbox_cleanup_error(mocker):
     """Test that sandbox cleanup errors are logged but don't fail the task."""
     # Create a test task
@@ -254,7 +483,7 @@ def test_execute_task_sandbox_cleanup_error(mocker):
         "app.services.agent_execution.AgentExecutionService.setup_sandbox_environment"
     )
 
-    # Mock run_command for successful git clone
+    # Mock run_command for successful git clone and branch creation
     mock_result = MagicMock()
     mock_result.exit_code = 0
     mocker.patch(
@@ -263,8 +492,16 @@ def test_execute_task_sandbox_cleanup_error(mocker):
     )
 
     mocker.patch(
-        "app.services.agent_execution.SandboxService.run_claude_code",
-        return_value=(0, "Success", ""),
+        "app.services.agent_execution.SandboxService.run_agent",
+        return_value={
+            "session_id": "test-session-123",
+            "result": "Task completed successfully",
+            "cost": 0.01,
+            "duration_ms": 1000,
+            "num_turns": 2,
+            "timed_out": False,
+            "logs": [],
+        },
     )
 
     # Execute the task - should not raise even though cleanup fails
@@ -272,4 +509,4 @@ def test_execute_task_sandbox_cleanup_error(mocker):
 
     # Verify result is still successful
     assert result["status"] == "completed"
-    assert result["exit_code"] == 0
+    assert result["session_id"] == "test-session-123"

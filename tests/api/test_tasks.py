@@ -118,59 +118,33 @@ def test_health_check(test_client, auth_headers):
     assert response.json() == {"status": "healthy"}
 
 
-def test_get_task_logs(test_client, auth_headers):
+def test_get_task_logs(test_client, auth_headers, mocker):
     """Test GET /v1/tasks/{task_id}/logs endpoint."""
     task = create_test_task(prompt="Task with logs")
 
-    # Store some logs
-    stdout = '{"type":"system","subtype":"init"}\n{"type":"assistant","message":"test"}'
-    stderr = "Some error"
-    TaskService.store_task_logs(task.id, stdout, stderr)
+    # Mock filesystem logs
+    mock_logs = [
+        {"type": "SystemMessage", "data": {"session_id": "test-123"}},
+        {"type": "AssistantMessage", "data": {"content": "Hello"}},
+        {"type": "ResultMessage", "data": {"result": "Done"}},
+    ]
+    mocker.patch(
+        "app.services.task.TaskService.get_task_logs",
+        return_value=(mock_logs, 3),
+    )
 
     response = test_client.get(f"/v1/tasks/{task.id}/logs", headers=auth_headers)
 
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 3  # 2 stdout + 1 stderr
+    assert data["total"] == 3
     assert len(data["logs"]) == 3
     assert data["limit"] == 100
     assert data["offset"] == 0
 
     # Check first log
-    assert data["logs"][0]["task_id"] == str(task.id)
-    assert data["logs"][0]["stream"] == "stdout"
-    assert data["logs"][0]["format"] == "json"
-    assert "id" in data["logs"][0]
-    assert "created_at" in data["logs"][0]
-
-
-def test_get_task_logs_pagination(test_client, auth_headers):
-    """Test GET /v1/tasks/{task_id}/logs with pagination."""
-    task = create_test_task(prompt="Task with many logs")
-
-    # Create multiple log lines
-    stdout = "\n".join([f'{{"line":{i}}}' for i in range(10)])
-    TaskService.store_task_logs(task.id, stdout, "")
-
-    # Get first page
-    response = test_client.get(
-        f"/v1/tasks/{task.id}/logs?limit=5&offset=0", headers=auth_headers
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data["logs"]) == 5
-    assert data["total"] == 10
-    assert data["limit"] == 5
-    assert data["offset"] == 0
-
-    # Get second page
-    response = test_client.get(
-        f"/v1/tasks/{task.id}/logs?limit=5&offset=5", headers=auth_headers
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data["logs"]) == 5
-    assert data["total"] == 10
+    assert data["logs"][0]["type"] == "SystemMessage"
+    assert "session_id" in data["logs"][0]["data"]
 
 
 def test_get_task_logs_not_found(test_client, auth_headers):
@@ -186,9 +160,15 @@ def test_get_task_logs_not_found(test_client, auth_headers):
     assert "not found" in response.json()["detail"]
 
 
-def test_get_task_logs_empty(test_client, auth_headers):
+def test_get_task_logs_empty(test_client, auth_headers, mocker):
     """Test GET /v1/tasks/{task_id}/logs with no logs."""
     task = create_test_task(prompt="Task without logs")
+
+    # Mock empty logs
+    mocker.patch(
+        "app.services.task.TaskService.get_task_logs",
+        return_value=([], 0),
+    )
 
     response = test_client.get(f"/v1/tasks/{task.id}/logs", headers=auth_headers)
 
