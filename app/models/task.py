@@ -44,6 +44,14 @@ class Task(SQLModel, table=True):
     sandbox_id: str | None = Field(
         default=None, description="ID of the sandbox where the task is running"
     )
+    session_id: str | None = Field(
+        default=None, description="Claude session ID for resumption"
+    )
+    parent_task_id: UUID | None = Field(
+        default=None,
+        foreign_key="tasks.id",
+        description="Parent task ID to resume from",
+    )
     repository_url: str = Field(
         description="GitHub repository URL to clone and work on"
     )

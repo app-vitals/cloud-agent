@@ -180,12 +180,27 @@ The project uses a custom `cloud-agent-v1` template with pre-installed:
 Services are started in sandbox with: `start-services`
 
 ### Environment Setup
+
+**Required Environment Variables:**
 - `NOVITA_API_KEY`: Required for sandbox creation
+- `CLAUDE_CODE_OAUTH_TOKEN`: **Preferred** authentication for Claude Code in sandboxes
+- `ANTHROPIC_API_KEY`: Alternative to OAuth token (not recommended)
+- `GITHUB_TOKEN`: Required for git operations
+
+**Why OAuth Token is Preferred:**
+- **Uses Claude Pro/Max subscription** instead of paying per API request
+- OAuth tokens are system-level credentials that work across all Claude Code instances
+- They provide better integration with Claude's authentication system
+
+**How Authentication Works:**
 - E2B environment variables are set automatically by `SandboxService`:
   ```python
   os.environ["E2B_API_KEY"] = settings.novita_api_key
   os.environ["E2B_DOMAIN"] = "sandbox.novita.ai"
   ```
+- Claude Code credentials are passed to sandbox as environment variables:
+  - `CLAUDE_CODE_OAUTH_TOKEN` (preferred) OR `ANTHROPIC_API_KEY`
+  - `GITHUB_TOKEN` for repository access
 
 ## API Conventions
 

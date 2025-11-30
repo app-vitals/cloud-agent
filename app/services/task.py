@@ -1,7 +1,9 @@
 """Task service for business logic."""
 
+import json
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import func
@@ -9,7 +11,7 @@ from sqlmodel import select
 
 from app.core.database import get_session
 from app.core.errors import NotFoundError
-from app.models import Task, TaskLog
+from app.models import Task
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +20,19 @@ class TaskService:
     """Service for task-related business logic."""
 
     @staticmethod
-    def create_task(prompt: str, repository_url: str) -> Task:
+    def create_task(
+        prompt: str,
+        repository_url: str,
+        parent_task_id: UUID | None = None,
+    ) -> Task:
         """Create a new task and queue it for execution."""
         with get_session() as session:
-            task = Task(prompt=prompt, repository_url=repository_url, status="pending")
+            task = Task(
+                prompt=prompt,
+                repository_url=repository_url,
+                status="pending",
+                parent_task_id=parent_task_id,
+            )
             session.add(task)
             session.commit()
             session.refresh(task)
@@ -71,6 +82,7 @@ class TaskService:
         status: str,
         result: str | None = None,
         sandbox_id: str | None = None,
+        session_id: str | None = None,
     ) -> Task:
         """Update task status and result."""
         with get_session() as session:
@@ -86,6 +98,8 @@ class TaskService:
                 task.result = result
             if sandbox_id is not None:
                 task.sandbox_id = sandbox_id
+            if session_id is not None:
+                task.session_id = session_id
 
             session.add(task)
             session.commit()
@@ -93,71 +107,64 @@ class TaskService:
             return task
 
     @staticmethod
-    def store_task_logs(task_id: UUID, stdout: str, stderr: str) -> None:
-        """Store task execution logs.
-
-        Args:
-            task_id: UUID of the task
-            stdout: stdout content from Claude Code (JSON lines)
-            stderr: stderr content from Claude Code
-        """
-        with get_session() as session:
-            # Store stdout lines as separate log entries
-            if stdout:
-                for line in stdout.strip().split("\n"):
-                    if line.strip():
-                        log = TaskLog(
-                            task_id=task_id,
-                            stream="stdout",
-                            format="json",
-                            content=line,
-                        )
-                        session.add(log)
-
-            # Store stderr as a single entry
-            if stderr:
-                log = TaskLog(
-                    task_id=task_id,
-                    stream="stderr",
-                    format="text",
-                    content=stderr,
-                )
-                session.add(log)
-
-            session.commit()
-            logger.info(f"Stored logs for task {task_id}")
-
-    @staticmethod
     def get_task_logs(
         task_id: UUID, limit: int = 100, offset: int = 0
-    ) -> tuple[list[TaskLog], int]:
-        """Get logs for a task with pagination.
+    ) -> tuple[list[dict], int]:
+        """Get logs for a task from filesystem with pagination.
+
+        Reads from session.jsonl file (JSONL format - one JSON object per line).
+        Streams line-by-line to avoid loading entire file into memory.
 
         Args:
             task_id: UUID of the task
-            limit: Maximum number of logs to return
-            offset: Number of logs to skip
+            limit: Maximum number of log lines to return
+            offset: Number of log lines to skip
 
         Returns:
             Tuple of (logs, total_count)
         """
-        with get_session() as session:
-            # Get total count
-            count_statement = (
-                select(func.count())
-                .select_from(TaskLog)
-                .where(TaskLog.task_id == task_id)
-            )
-            total = session.execute(count_statement).scalar()
+        # Verify task exists
+        TaskService.get_task_by_id(task_id)
 
-            # Get paginated results ordered by created_at asc
-            statement = (
-                select(TaskLog)
-                .where(TaskLog.task_id == task_id)
-                .order_by(TaskLog.created_at.asc())
-                .offset(offset)
-                .limit(limit)
-            )
-            logs = session.execute(statement).scalars().all()
+        # Read logs from session file (JSONL format)
+        log_file = Path("logs/tasks") / str(task_id) / "session.jsonl"
+        if not log_file.exists():
+            logger.warning(f"No logs found for task {task_id}")
+            return [], 0
 
-            return list(logs), total
+        try:
+            logs = []
+            total = 0
+            line_num = 0
+
+            with open(log_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    total += 1
+
+                    # Skip lines before offset
+                    if line_num < offset:
+                        line_num += 1
+                        continue
+
+                    # Stop if we've collected enough
+                    if len(logs) >= limit:
+                        # Continue counting total but don't parse
+                        continue
+
+                    # Parse and add to results
+                    try:
+                        logs.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Failed to parse log line {line_num}: {e}")
+                        logs.append({"error": "Failed to parse", "raw": line})
+
+                    line_num += 1
+
+            return logs, total
+        except Exception as e:
+            logger.error(f"Failed to read logs for task {task_id}: {e}")
+            return [], 0

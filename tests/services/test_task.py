@@ -1,5 +1,7 @@
 """Tests for TaskService."""
 
+import json
+
 import pytest
 
 from app.core.errors import NotFoundError
@@ -109,54 +111,99 @@ def test_update_task_status_not_found():
     assert f"Task with id {non_existent_id} not found" in str(exc_info.value)
 
 
-def test_store_task_logs():
-    """Test storing task logs."""
-    task = create_test_task(prompt="Task with logs")
-
-    stdout = '{"type":"system","subtype":"init"}\n{"type":"assistant","message":"test"}'
-    stderr = "Some error output"
-
-    TaskService.store_task_logs(task.id, stdout, stderr)
-
-    logs, total = TaskService.get_task_logs(task.id)
-
-    assert total == 3  # 2 stdout lines + 1 stderr
-    assert logs[0].stream == "stdout"
-    assert logs[0].format == "json"
-    assert logs[1].stream == "stdout"
-    assert logs[1].format == "json"
-    assert logs[2].stream == "stderr"
-    assert logs[2].format == "text"
-    assert logs[2].content == stderr
-
-
-def test_get_task_logs_pagination():
-    """Test getting task logs with pagination."""
-    task = create_test_task(prompt="Task with many logs")
-
-    # Create multiple log lines
-    stdout = "\n".join([f'{{"line":{i}}}' for i in range(10)])
-    TaskService.store_task_logs(task.id, stdout, "")
-
-    # Get first page
-    logs_page1, total = TaskService.get_task_logs(task.id, limit=5, offset=0)
-    assert len(logs_page1) == 5
-    assert total == 10
-
-    # Get second page
-    logs_page2, total = TaskService.get_task_logs(task.id, limit=5, offset=5)
-    assert len(logs_page2) == 5
-    assert total == 10
-
-    # Ensure pages are different
-    assert logs_page1[0].id != logs_page2[0].id
-
-
 def test_get_task_logs_empty():
-    """Test getting logs for task with no logs."""
+    """Test getting logs for task with no logs (filesystem-based)."""
     task = create_test_task(prompt="Task without logs")
 
+    # Logs should return empty list if file doesn't exist
     logs, total = TaskService.get_task_logs(task.id)
 
-    assert total == 0
     assert len(logs) == 0
+    assert total == 0
+
+
+def test_get_task_logs_with_pagination(mocker, tmp_path):
+    """Test getting logs with pagination."""
+    task = create_test_task(prompt="Task with logs")
+
+    # Create mock JSONL file with 10 messages (one JSON object per line)
+    log_file = tmp_path / "session.jsonl"
+    with open(log_file, "w") as f:
+        for i in range(10):
+            f.write(json.dumps({"type": f"Message{i}", "data": {}}) + "\n")
+
+    mocker.patch("pathlib.Path.exists", return_value=True)
+    # Mock Path to return our temp file path
+    mocker.patch("pathlib.Path.__truediv__", return_value=log_file)
+
+    # Get first page
+    logs, total = TaskService.get_task_logs(task.id, limit=5, offset=0)
+    assert len(logs) == 5
+    assert total == 10
+    assert logs[0]["type"] == "Message0"
+
+    # Get second page
+    logs, total = TaskService.get_task_logs(task.id, limit=5, offset=5)
+    assert len(logs) == 5
+    assert total == 10
+    assert logs[0]["type"] == "Message5"
+
+
+def test_get_task_logs_read_error(mocker):
+    """Test getting logs when file read fails."""
+    task = create_test_task(prompt="Task with corrupt logs")
+
+    # Mock file exists but read fails
+    mocker.patch("pathlib.Path.exists", return_value=True)
+    mocker.patch("builtins.open", side_effect=Exception("Disk error"))
+
+    # Should return empty list on error
+    logs, total = TaskService.get_task_logs(task.id)
+
+    assert len(logs) == 0
+    assert total == 0
+
+
+def test_get_task_logs_with_empty_lines(mocker, tmp_path):
+    """Test getting logs with empty lines in JSONL file."""
+    task = create_test_task(prompt="Task with empty lines")
+
+    # Create JSONL file with empty lines
+    log_file = tmp_path / "session.jsonl"
+    with open(log_file, "w") as f:
+        f.write(json.dumps({"type": "Message0", "data": {}}) + "\n")
+        f.write("\n")  # Empty line
+        f.write("   \n")  # Whitespace line
+        f.write(json.dumps({"type": "Message1", "data": {}}) + "\n")
+
+    mocker.patch("pathlib.Path.exists", return_value=True)
+    mocker.patch("pathlib.Path.__truediv__", return_value=log_file)
+
+    logs, total = TaskService.get_task_logs(task.id, limit=10, offset=0)
+    assert len(logs) == 2  # Only valid lines
+    assert total == 2  # Empty lines not counted
+    assert logs[0]["type"] == "Message0"
+    assert logs[1]["type"] == "Message1"
+
+
+def test_get_task_logs_with_invalid_json(mocker, tmp_path):
+    """Test getting logs with invalid JSON lines."""
+    task = create_test_task(prompt="Task with invalid JSON")
+
+    # Create JSONL file with invalid JSON
+    log_file = tmp_path / "session.jsonl"
+    with open(log_file, "w") as f:
+        f.write(json.dumps({"type": "Message0", "data": {}}) + "\n")
+        f.write("not valid json\n")  # Invalid JSON
+        f.write(json.dumps({"type": "Message1", "data": {}}) + "\n")
+
+    mocker.patch("pathlib.Path.exists", return_value=True)
+    mocker.patch("pathlib.Path.__truediv__", return_value=log_file)
+
+    logs, total = TaskService.get_task_logs(task.id, limit=10, offset=0)
+    assert len(logs) == 3  # All lines returned
+    assert total == 3
+    assert logs[0]["type"] == "Message0"
+    assert "error" in logs[1]  # Invalid JSON becomes error object
+    assert logs[1]["raw"] == "not valid json"
+    assert logs[2]["type"] == "Message1"

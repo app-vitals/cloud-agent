@@ -18,17 +18,20 @@ class TaskCreate(BaseModel):
 
     prompt: str
     repository_url: str
+    parent_task_id: UUID | None = None
 
 
 class TaskResponse(BaseModel):
     """Response model for task data."""
 
-    id: str
+    id: UUID
     prompt: str
     repository_url: str
     status: str
     result: str | None
     sandbox_id: str | None
+    session_id: str | None
+    parent_task_id: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -43,14 +46,9 @@ class TaskListResponse(BaseModel):
 
 
 class TaskLogResponse(BaseModel):
-    """Response model for a task log entry."""
+    """Response model for a task log entry (raw session.jsonl message)."""
 
-    id: str
-    created_at: datetime
-    task_id: str
-    stream: str
-    format: str
-    content: str
+    model_config = {"extra": "allow"}  # Allow any additional fields
 
 
 class TaskLogListResponse(BaseModel):
@@ -66,15 +64,19 @@ class TaskLogListResponse(BaseModel):
 def create_task(task_data: TaskCreate, api_key: str = Depends(verify_api_key)):
     """Create a new task."""
     task = TaskService.create_task(
-        prompt=task_data.prompt, repository_url=task_data.repository_url
+        prompt=task_data.prompt,
+        repository_url=task_data.repository_url,
+        parent_task_id=task_data.parent_task_id,
     )
 
     return TaskResponse(
-        id=str(task.id),
+        id=task.id,
         prompt=task.prompt,
         status=task.status,
         result=task.result,
         sandbox_id=task.sandbox_id,
+        session_id=task.session_id,
+        parent_task_id=task.parent_task_id,
         repository_url=task.repository_url,
         created_at=task.created_at,
         updated_at=task.updated_at,
@@ -93,11 +95,13 @@ def get_task(task_id: UUID, api_key: str = Depends(verify_api_key)):
         ) from e
 
     return TaskResponse(
-        id=str(task.id),
+        id=task.id,
         prompt=task.prompt,
         status=task.status,
         result=task.result,
         sandbox_id=task.sandbox_id,
+        session_id=task.session_id,
+        parent_task_id=task.parent_task_id,
         repository_url=task.repository_url,
         created_at=task.created_at,
         updated_at=task.updated_at,
@@ -113,11 +117,13 @@ def list_tasks(
 
     task_responses = [
         TaskResponse(
-            id=str(task.id),
+            id=task.id,
             prompt=task.prompt,
             status=task.status,
             result=task.result,
             sandbox_id=task.sandbox_id,
+            session_id=task.session_id,
+            parent_task_id=task.parent_task_id,
             repository_url=task.repository_url,
             created_at=task.created_at,
             updated_at=task.updated_at,
@@ -140,12 +146,9 @@ def get_task_logs(
     offset: int = 0,
     api_key: str = Depends(verify_api_key),
 ):
-    """Get logs for a task with pagination."""
+    """Get logs for a task from filesystem with pagination."""
     try:
-        # Verify task exists
-        TaskService.get_task_by_id(task_id)
-
-        # Get logs
+        # Get logs from filesystem
         logs, total = TaskService.get_task_logs(task_id, limit=limit, offset=offset)
     except NotFoundError as e:
         raise HTTPException(
@@ -153,17 +156,8 @@ def get_task_logs(
             detail=str(e),
         ) from e
 
-    log_responses = [
-        TaskLogResponse(
-            id=str(log.id),
-            created_at=log.created_at,
-            task_id=str(log.task_id),
-            stream=log.stream,
-            format=log.format,
-            content=log.content,
-        )
-        for log in logs
-    ]
+    # Return raw log objects without transformation
+    log_responses = logs
 
     return TaskLogListResponse(
         logs=log_responses,

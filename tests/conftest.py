@@ -18,9 +18,12 @@ os.environ["APP_ENV"] = "test"
 def create_test_task(
     prompt: str = "Test task prompt",
     repository_url: str = "https://github.com/test/repo.git",
+    parent_task_id=None,
 ) -> Task:
     """Helper function to create a test task with default values."""
-    return TaskService.create_task(prompt=prompt, repository_url=repository_url)
+    return TaskService.create_task(
+        prompt=prompt, repository_url=repository_url, parent_task_id=parent_task_id
+    )
 
 
 @pytest.fixture(autouse=True, scope="function")
@@ -55,4 +58,6 @@ def test_client():
 @pytest.fixture(scope="function")
 def auth_headers():
     """Provide authentication headers for API requests."""
-    return {"X-API-Key": "dev-secret-key"}
+    from app.core.config import settings
+
+    return {"X-API-Key": settings.api_secret_key}

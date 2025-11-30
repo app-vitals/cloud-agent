@@ -29,11 +29,9 @@ class Settings(BaseModel):
     novita_api_key: str | None = os.getenv("NOVITA_API_KEY")
 
     # Claude
-    system_anthropic_api_key: str | None = os.getenv("SYSTEM_ANTHROPIC_API_KEY")
-    system_claude_code_oauth_token: str | None = os.getenv(
-        "SYSTEM_CLAUDE_CODE_OAUTH_TOKEN"
-    )
-    system_github_token: str | None = os.getenv("SYSTEM_GITHUB_TOKEN")
+    anthropic_api_key: str | None = os.getenv("ANTHROPIC_API_KEY")
+    claude_code_oauth_token: str | None = os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
+    github_token: str | None = os.getenv("GITHUB_TOKEN")
 
     # Timeouts (in seconds)
     sandbox_timeout: int = int(os.getenv("SANDBOX_TIMEOUT", "600"))  # 10 minutes
