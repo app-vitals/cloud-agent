@@ -43,6 +43,24 @@ Client → FastAPI → TaskService.create_task()
 - Celery tasks have 3 auto-retries with exponential backoff (5s + jitter)
 - Failed tasks are marked in database after final retry
 
+### Session Logs and Task Storage
+
+**Log Storage:**
+- Session logs are stored in filesystem: `logs/tasks/{task_id}/session.jsonl`
+- Logs are extracted from Claude's session directory: `~/.claude/projects/-home-user-repo/`
+- Session files are discovered by listing `.jsonl` files in Claude's directory (one session per sandbox)
+- This works for both successful and timed-out tasks
+
+**File Extraction:**
+- Modified files from completed tasks stored in: `logs/tasks/{task_id}/files/`
+- Only files detected by `git status --porcelain` are extracted
+- Files over 10MB are skipped
+
+**Session Resumption:**
+- Parent task's session file is restored to Claude's directory before running
+- Session ID is passed to Claude Code via `--resume` flag
+- Allows continuation of conversation context across tasks
+
 ## Common Commands
 
 ### Development Setup
@@ -220,6 +238,19 @@ GET    /v1/tasks/{id}/files     - Get modified files from completed task
 GET    /v1/tasks/{id}/session   - Get session data for local resumption
 GET    /health                  - Health check
 ```
+
+### Task Workflow
+
+**Creating Tasks:**
+- Tasks are immediately queued to Celery upon creation
+- Each task runs independently in its own sandbox
+- Tasks can specify a `parent_task_id` to resume from a previous task
+
+**Task Resumption:**
+- **IMPORTANT**: Parent task must be in `completed` status before creating a resume task
+- Resume tasks continue from the parent's conversation context
+- Use `ca task wait <task-id>` to wait for parent completion before resuming
+- Workflow: `ca task create` → `ca task wait` → `ca task resume`
 
 ## Development Philosophy
 
