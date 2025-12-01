@@ -3,7 +3,6 @@
 import json
 import re
 import subprocess
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -63,11 +62,7 @@ def create_task(
     if repo is None:
         repo_url, _ = get_current_repo()
     else:
-        # If repo doesn't start with http/git, assume it's org/name format
-        if not repo.startswith(("http://", "https://", "git@")):
-            repo_url = f"https://github.com/{repo}.git"
-        else:
-            repo_url = repo
+        repo_url = GitService.normalize_repo_url(repo)
 
     task = ApiClientService.create_task(prompt=prompt, repository_url=repo_url)
 
@@ -201,32 +196,19 @@ def wait_task(
     timeout: int = typer.Option(600, "--timeout", "-t", help="Timeout in seconds"),
 ):
     """Wait for task to complete."""
-    start_time = time.time()
+    try:
+        task = ApiClientService.wait_for_task(task_id, timeout=timeout)
 
-    with get_client() as client:
-        while True:
-            if time.time() - start_time > timeout:
-                console.print(f"[red]✗[/red] Timeout after {timeout}s")
-                raise typer.Exit(1)
-
-            response = client.get(f"/v1/tasks/{task_id}")
-            response.raise_for_status()
-            task = response.json()
-
-            status = task["status"]
-            console.print(f"Status: {status}...", end="\r")
-
-            if status in ["completed", "failed", "cancelled"]:
-                console.print()  # New line
-                if status == "completed":
-                    console.print("[green]✓[/green] Task completed")
-                else:
-                    console.print(f"[red]✗[/red] Task {status}")
-                    if task.get("result"):
-                        console.print(f"  {task['result']}")
-                break
-
-            time.sleep(5)
+        status = task["status"]
+        if status == "completed":
+            console.print("[green]✓[/green] Task completed")
+        else:
+            console.print(f"[red]✗[/red] Task {status}")
+            if task.get("result"):
+                console.print(f"  {task['result']}")
+    except TimeoutError:
+        console.print(f"[red]✗[/red] Timeout after {timeout}s")
+        raise typer.Exit(1) from None
 
 
 @task_app.command("apply")
@@ -340,18 +322,17 @@ def review_pr(
     else:
         # If repo doesn't start with http/git, assume it's org/name format
         if not repo.startswith(("http://", "https://", "git@")):
-            repo_url = f"https://github.com/{repo}.git"
+            repo_url = GitService.normalize_repo_url(repo)
             org_repo = repo
         else:
             # Parse org/repo from full URL
-            match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", repo)
-            if not match:
+            try:
+                repo_url, org_repo = GitService.parse_github_url(repo)
+            except ValueError as e:
                 console.print("[red]✗[/red] Could not parse GitHub repo from URL")
                 console.print(f"  URL: {repo}")
-                raise typer.Exit(1)
-            org_repo = match.group(1)
-            # Normalize to HTTPS
-            repo_url = f"https://github.com/{org_repo}.git"
+                console.print(f"  Error: {e}")
+                raise typer.Exit(1) from None
 
     pr_url = f"https://github.com/{org_repo}/pull/{pr_number}"
 

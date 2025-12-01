@@ -1,6 +1,7 @@
 """API client service for interacting with Cloud Agent API."""
 
 import os
+import time
 from typing import Any
 
 import httpx
@@ -98,3 +99,37 @@ class ApiClientService:
         finally:
             if should_close:
                 client.close()
+
+    @staticmethod
+    def wait_for_task(
+        task_id: str,
+        timeout: int = 600,
+        poll_interval: int = 5,
+    ) -> dict[str, Any]:
+        """Wait for task to complete with polling.
+
+        Args:
+            task_id: Task ID to wait for
+            timeout: Maximum time to wait in seconds (default: 600)
+            poll_interval: Time between status checks in seconds (default: 5)
+
+        Returns:
+            Final task data when completed or failed
+
+        Raises:
+            TimeoutError: If task doesn't complete within timeout period
+            httpx.HTTPStatusError: If the API returns an error
+        """
+        start_time = time.time()
+
+        while True:
+            if time.time() - start_time > timeout:
+                raise TimeoutError(f"Task {task_id} did not complete within {timeout}s")
+
+            task = ApiClientService.get_task(task_id)
+            status = task["status"]
+
+            if status in ["completed", "failed", "cancelled"]:
+                return task
+
+            time.sleep(poll_interval)

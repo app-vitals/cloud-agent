@@ -53,3 +53,53 @@ class GitService:
 
         except subprocess.CalledProcessError as e:
             raise GitError("Not in a git repository or no remote 'origin' found") from e
+
+    @staticmethod
+    def normalize_repo_url(repo: str) -> str:
+        """Normalize repository input to HTTPS GitHub URL.
+
+        Handles multiple input formats:
+        - org/name format: "myorg/myrepo"
+        - Full HTTPS URL: "https://github.com/myorg/myrepo.git"
+        - Full HTTP URL: "http://github.com/myorg/myrepo.git"
+        - SSH URL: "git@github.com:myorg/myrepo.git"
+
+        Args:
+            repo: Repository in any of the supported formats
+
+        Returns:
+            str: Normalized HTTPS URL ending with .git
+        """
+        # If repo doesn't start with http/git, assume it's org/name format
+        if not repo.startswith(("http://", "https://", "git@")):
+            return f"https://github.com/{repo}.git"
+
+        # Parse org/repo from full URL and normalize to HTTPS
+        org_repo = GitService.parse_github_url(repo)[1]
+        return f"https://github.com/{org_repo}.git"
+
+    @staticmethod
+    def parse_github_url(repo: str) -> tuple[str, str]:
+        """Parse GitHub repository URL to extract org/repo.
+
+        Handles both HTTPS and SSH URLs:
+        - https://github.com/org/repo.git
+        - git@github.com:org/repo.git
+
+        Args:
+            repo: GitHub repository URL
+
+        Returns:
+            tuple[str, str]: (normalized_https_url, org/repo)
+
+        Raises:
+            ValueError: If URL cannot be parsed as a GitHub repository
+        """
+        match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", repo)
+        if not match:
+            raise ValueError(f"Could not parse GitHub repo from URL: {repo}")
+
+        org_repo = match.group(1)
+        repo_url = f"https://github.com/{org_repo}.git"
+
+        return repo_url, org_repo
