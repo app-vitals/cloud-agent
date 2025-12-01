@@ -753,6 +753,13 @@ Ran 6 comprehensive tests - all passed! See `SDK_MIGRATION_PLAN.md` for details.
 **Note**: Deliberately skipping task-based API keys - account-based makes more sense for real usage.
 
 ### Phase 6: Enhancements (Future)
+- [ ] **CLI improvements for managing multiple parallel tasks**
+  - Add `--json` flag to `ca task create` for machine-readable output
+  - Add `ca task status <id1> <id2> ...` to check multiple tasks at once
+  - Optional: Add `ca task watch` for auto-refreshing status view
+  - Use case: Create multiple independent tasks, monitor them in parallel using Claude's background bash
+  - Benefits: Better ergonomics for running multiple PRs/features/fixes concurrently
+
 - [ ] **Live log streaming for running tasks**
   - Problem: Currently can only see logs after task completes/fails
   - Solution: When `GET /tasks/{task_id}/logs` is called for running task:
