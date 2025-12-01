@@ -70,11 +70,11 @@ def get_current_repo() -> tuple[str, str]:
 
         org_repo = match.group(1)
 
-        # Ensure it ends with .git for repository_url
-        if not remote_url.endswith(".git"):
-            remote_url = f"{remote_url}.git"
+        # Convert to HTTPS URL for use with GitHub token authentication
+        # SSH URLs (git@github.com:org/repo.git) won't work with token auth
+        repository_url = f"https://github.com/{org_repo}.git"
 
-        return remote_url, org_repo
+        return repository_url, org_repo
 
     except subprocess.CalledProcessError:
         console.print(
