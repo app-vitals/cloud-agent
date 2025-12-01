@@ -1,7 +1,6 @@
 """Cloud Agent CLI - Simple command-line interface for cloud-agent API."""
 
 import json
-import os
 import re
 import subprocess
 import time
@@ -14,6 +13,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
+from app.services.api_client import ApiClientService
 from app.services.git import GitError, GitService
 
 # Load .env file from project root (parent of app/ directory)
@@ -28,18 +28,10 @@ app.add_typer(pr_app, name="pr")
 
 console = Console()
 
-# Configuration
-API_BASE_URL = os.getenv("CLOUD_AGENT_URL", "http://localhost:8000")
-API_KEY = os.getenv("API_SECRET_KEY")
-
 
 def get_client() -> httpx.Client:
     """Get configured HTTP client."""
-    return httpx.Client(
-        base_url=API_BASE_URL,
-        headers={"X-API-Key": API_KEY},
-        timeout=30.0,
-    )
+    return ApiClientService.get_client()
 
 
 def get_current_repo() -> tuple[str, str]:
@@ -77,13 +69,7 @@ def create_task(
         else:
             repo_url = repo
 
-    with get_client() as client:
-        response = client.post(
-            "/v1/tasks",
-            json={"prompt": prompt, "repository_url": repo_url},
-        )
-        response.raise_for_status()
-        task = response.json()
+    task = ApiClientService.create_task(prompt=prompt, repository_url=repo_url)
 
     console.print(f"[green]✓[/green] Task created: [bold]{task['id']}[/bold]")
     console.print(f"  Status: {task['status']}")
@@ -100,23 +86,14 @@ def resume_task(
 ):
     """Resume a task from a previous task."""
     # Get parent task to get repository URL
-    with get_client() as client:
-        response = client.get(f"/v1/tasks/{parent_task_id}")
-        response.raise_for_status()
-        parent_task = response.json()
+    parent_task = ApiClientService.get_task(parent_task_id)
 
     # Create new task with parent_task_id
-    with get_client() as client:
-        response = client.post(
-            "/v1/tasks",
-            json={
-                "prompt": prompt,
-                "repository_url": parent_task["repository_url"],
-                "parent_task_id": parent_task_id,
-            },
-        )
-        response.raise_for_status()
-        task = response.json()
+    task = ApiClientService.create_task(
+        prompt=prompt,
+        repository_url=parent_task["repository_url"],
+        parent_task_id=parent_task_id,
+    )
 
     console.print(f"[green]✓[/green] Resumed task created: [bold]{task['id']}[/bold]")
     console.print(f"  Parent: [dim]{parent_task_id}[/dim]")
@@ -166,10 +143,7 @@ def list_tasks(
 @task_app.command("get")
 def get_task(task_id: str = typer.Argument(..., help="Task ID")):
     """Get task details."""
-    with get_client() as client:
-        response = client.get(f"/v1/tasks/{task_id}")
-        response.raise_for_status()
-        task = response.json()
+    task = ApiClientService.get_task(task_id)
 
     # Calculate duration
     created = datetime.fromisoformat(task["created_at"].replace("Z", "+00:00"))
