@@ -252,6 +252,44 @@ GET    /health                  - Health check
 - Use `ca task wait <task-id>` to wait for parent completion before resuming
 - Workflow: `ca task create` → `ca task wait` → `ca task resume`
 
+**Best Practice: Branch-Based Workflow vs Session Resumption**
+
+For multi-step work on a PR, there are two approaches:
+
+1. **Session Resumption** (`ca task resume`):
+   - ✅ Maintains full conversation context
+   - ❌ High overhead: Loads all parent conversation history (can be 80K+ tokens)
+   - ❌ Slower: Context loading adds significant time
+   - **Use when**: You need the agent to remember specific decisions or reasoning from previous steps
+
+2. **Branch-Based Workflow** (Recommended for most cases):
+   - ✅ No context overhead: Fresh start each time
+   - ✅ Faster: No need to load parent conversation
+   - ✅ Still builds on previous work: Just checkout the PR branch
+   - ❌ No conversation memory: Agent doesn't remember previous discussion
+   - **Use when**: Work can be described independently (most refactoring, incremental features)
+
+**Example Branch-Based Workflow:**
+```bash
+# Task 1: Initial work
+ca task create "Create UserService in app/services/user.py with get_user() method. Create PR."
+
+# Task 2: Add to same PR (no resume needed!)
+ca task create "Checkout PR branch and add update_user() method to UserService. Add tests. Commit to PR."
+
+# Task 3: More additions
+ca task create "Checkout PR branch and add delete_user() method to UserService. Add tests. Commit to PR."
+
+# Final: Update PR description with all changes
+ca task create "Checkout PR branch and update PR title and description to summarize all UserService methods added."
+```
+
+**Why Branch-Based is Better:**
+- Each task runs in ~3-5 minutes vs 5+ minutes with resume
+- No risk of timeout due to context loading
+- Simpler prompts - just describe what to add
+- Agent reads current code state from files, not conversation history
+
 ## Development Philosophy
 
 - **Natural language interface**: No predefined task types, user describes intent
