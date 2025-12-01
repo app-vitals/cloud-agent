@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
+from app.services.git import GitError, GitService
+
 # Load .env file from project root (parent of app/ directory)
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path)
@@ -50,37 +52,9 @@ def get_current_repo() -> tuple[str, str]:
         typer.Exit: If not in a git repository or no remote found
     """
     try:
-        # Get remote URL
-        result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        remote_url = result.stdout.strip()
-
-        # Parse org/name from URL
-        # Handles both HTTPS and SSH URLs:
-        # - https://github.com/org/repo.git
-        # - git@github.com:org/repo.git
-        match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", remote_url)
-        if not match:
-            console.print("[red]✗[/red] Could not parse GitHub repo from remote URL")
-            console.print(f"  Remote: {remote_url}")
-            raise typer.Exit(1)
-
-        org_repo = match.group(1)
-
-        # Convert to HTTPS URL for use with GitHub token authentication
-        # SSH URLs (git@github.com:org/repo.git) won't work with token auth
-        repository_url = f"https://github.com/{org_repo}.git"
-
-        return repository_url, org_repo
-
-    except subprocess.CalledProcessError:
-        console.print(
-            "[red]✗[/red] Not in a git repository or no remote 'origin' found"
-        )
+        return GitService.get_current_repo()
+    except GitError as e:
+        console.print(f"[red]✗[/red] {e}")
         console.print("  Either run from a git repo or specify --repo explicitly")
         raise typer.Exit(1) from None
 
