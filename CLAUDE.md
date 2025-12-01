@@ -43,6 +43,24 @@ Client → FastAPI → TaskService.create_task()
 - Celery tasks have 3 auto-retries with exponential backoff (5s + jitter)
 - Failed tasks are marked in database after final retry
 
+### Session Logs and Task Storage
+
+**Log Storage:**
+- Session logs are stored in filesystem: `logs/tasks/{task_id}/session.jsonl`
+- Logs are extracted from Claude's session directory: `~/.claude/projects/-home-user-repo/`
+- Session files are discovered by listing `.jsonl` files in Claude's directory (one session per sandbox)
+- This works for both successful and timed-out tasks
+
+**File Extraction:**
+- Modified files from completed tasks stored in: `logs/tasks/{task_id}/files/`
+- Only files detected by `git status --porcelain` are extracted
+- Files over 10MB are skipped
+
+**Session Resumption:**
+- Parent task's session file is restored to Claude's directory before running
+- Session ID is passed to Claude Code via `--resume` flag
+- Allows continuation of conversation context across tasks
+
 ## Common Commands
 
 ### Development Setup
@@ -220,6 +238,69 @@ GET    /v1/tasks/{id}/files     - Get modified files from completed task
 GET    /v1/tasks/{id}/session   - Get session data for local resumption
 GET    /health                  - Health check
 ```
+
+### Task Workflow
+
+**Creating Tasks:**
+- Tasks are immediately queued to Celery upon creation
+- Each task runs independently in its own sandbox
+- Tasks can specify a `parent_task_id` to resume from a previous task
+
+**Task Resumption:**
+- **IMPORTANT**: Parent task must be in `completed` status before creating a resume task
+- Resume tasks continue from the parent's conversation context
+- Use `ca task wait <task-id>` to wait for parent completion before resuming
+- Workflow: `ca task create` → `ca task wait` → `ca task resume`
+
+**Best Practice: Branch-Based Workflow vs Session Resumption**
+
+For multi-step work on a PR, there are two approaches:
+
+1. **Session Resumption** (`ca task resume`):
+   - ✅ Maintains full conversation context
+   - ❌ High overhead: Loads all parent conversation history (can be 80K+ tokens)
+   - ❌ Slower: Context loading adds significant time
+   - **Use when**: You need the agent to remember specific decisions or reasoning from previous steps
+
+2. **Branch-Based Workflow** (Recommended for most cases):
+   - ✅ No context overhead: Fresh start each time
+   - ✅ Faster: No need to load parent conversation
+   - ✅ Still builds on previous work: Just checkout the PR branch
+   - ❌ No conversation memory: Agent doesn't remember previous discussion
+   - **Use when**: Work can be described independently (most refactoring, incremental features)
+
+**Example Branch-Based Workflow:**
+```bash
+# Task 1: Initial work
+ca task create "Create UserService in app/services/user.py with get_user() method. Create PR."
+
+# Task 2: Add to same PR (no resume needed!)
+ca task create "Use 'gh pr checkout 14' to checkout the PR. Add update_user() method to UserService. Add tests. Push your commit to the PR branch."
+
+# Task 3: More additions
+ca task create "Use 'gh pr checkout 14' to checkout the PR. Add delete_user() method to UserService. Add tests. Push your commit to the PR branch."
+
+# Final: Update PR description with all changes
+ca task create "Use 'gh pr checkout 14' to checkout the PR. Update PR title and description to summarize all UserService methods added."
+```
+
+**CRITICAL Best Practices:**
+
+1. **Use gh CLI for PR checkout** - Say "Use 'gh pr checkout N'" instead of specifying branch names
+   - Branch names can be wrong or change
+   - gh CLI ensures you're always on the correct PR branch
+   - Prevents accidentally creating duplicate branches
+
+2. **Always explicitly say "Push your commit to the PR branch"**
+   - If you only say "Commit changes", the agent will commit locally but NOT push
+   - Work is lost when the sandbox terminates if not pushed
+   - Be explicit in every task prompt that should update a PR
+
+**Why Branch-Based is Better:**
+- Each task runs in ~3-5 minutes vs 5+ minutes with resume
+- No risk of timeout due to context loading
+- Simpler prompts - just describe what to add
+- Agent reads current code state from files, not conversation history
 
 ## Development Philosophy
 

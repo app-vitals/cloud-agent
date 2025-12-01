@@ -69,9 +69,6 @@ def create_task(
     console.print(f"  Status: {task['status']}")
     console.print(f"  Repository: {task['repository_url']}")
 
-    if task.get("branch_name"):
-        console.print(f"  Branch: [cyan]{task['branch_name']}[/cyan]")
-
 
 @task_app.command("resume")
 def resume_task(
@@ -151,9 +148,6 @@ def get_task(task_id: str = typer.Argument(..., help="Task ID")):
     console.print(f"  Created: {task['created_at']}")
     console.print(f"  Updated: {task['updated_at']}")
     console.print(f"  Duration: {duration_str}")
-
-    if task.get("branch_name"):
-        console.print(f"  Branch: [cyan]{task['branch_name']}[/cyan]")
 
     if task.get("session_id"):
         console.print(f"  Session: {task['session_id']}")

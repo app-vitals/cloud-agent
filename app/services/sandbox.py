@@ -185,23 +185,50 @@ class SandboxService:
             raise
 
         # Store session file from Claude's project directory
+        # Always read from filesystem instead of relying on JSON output
+        # (which may not be available on timeout)
         task_dir = Path("logs/tasks") / str(task_id)
         task_dir.mkdir(parents=True, exist_ok=True)
 
-        if session_id:
-            try:
-                # Session files are in ~/.claude/projects/<normalized-path>/{session_id}.jsonl
-                session_dir = "/home/user/.claude/projects/-home-user-repo"
-                session_file_path = f"{session_dir}/{session_id}.jsonl"
+        try:
+            # Claude stores sessions in ~/.claude/projects/<normalized-path>/
+            session_dir = "/home/user/.claude/projects/-home-user-repo"
+
+            # List all .jsonl files in the session directory
+            # There should be exactly one session file per sandbox (one task per sandbox)
+            ls_result = SandboxService.run_command(
+                sandbox, f"ls -1 {session_dir}/*.jsonl 2>/dev/null || true"
+            )
+
+            session_files = [
+                f.strip() for f in ls_result.stdout.strip().split("\n") if f.strip()
+            ]
+
+            if session_files:
+                # Use the first (and should be only) session file
+                session_file_path = session_files[0]
+                session_filename = Path(session_file_path).name
+                discovered_session_id = session_filename.replace(".jsonl", "")
+
+                # Read session content
                 session_jsonl = sandbox.files.read(session_file_path)
                 (task_dir / "session.jsonl").write_text(session_jsonl)
-                logger.info(f"Stored session file for task {task_id}")
-            except Exception as e:
-                logger.warning(f"Failed to store session file: {e}")
-                # Create empty session file if not found
+
+                # Update session_id if we didn't get it from JSON output
+                if not session_id:
+                    session_id = discovered_session_id
+                    logger.info(f"Discovered session ID from filesystem: {session_id}")
+
+                logger.info(
+                    f"Stored session file for task {task_id} ({len(session_jsonl)} bytes)"
+                )
+            else:
+                logger.warning(f"No session files found in {session_dir}")
+                # Create empty session file
                 (task_dir / "session.jsonl").write_text("")
-        else:
-            # No session created (likely errored early), create empty file
+        except Exception as e:
+            logger.warning(f"Failed to store session file: {e}")
+            # Create empty session file if extraction failed
             (task_dir / "session.jsonl").write_text("")
 
         return {
