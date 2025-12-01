@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -65,9 +64,9 @@ def create_task(
 
     task = ApiClientService.create_task(prompt=prompt, repository_url=repo_url)
 
-    console.print(f"[green]✓[/green] Task created: [bold]{task['id']}[/bold]")
-    console.print(f"  Status: {task['status']}")
-    console.print(f"  Repository: {task['repository_url']}")
+    console.print(f"[green]✓[/green] Task created: [bold]{task.id}[/bold]")
+    console.print(f"  Status: {task.status}")
+    console.print(f"  Repository: {task.repository_url}")
 
 
 @task_app.command("resume")
@@ -82,14 +81,14 @@ def resume_task(
     # Create new task with parent_task_id
     task = ApiClientService.create_task(
         prompt=prompt,
-        repository_url=parent_task["repository_url"],
+        repository_url=parent_task.repository_url,
         parent_task_id=parent_task_id,
     )
 
-    console.print(f"[green]✓[/green] Resumed task created: [bold]{task['id']}[/bold]")
+    console.print(f"[green]✓[/green] Resumed task created: [bold]{task.id}[/bold]")
     console.print(f"  Parent: [dim]{parent_task_id}[/dim]")
-    console.print(f"  Status: {task['status']}")
-    console.print(f"  Repository: {task['repository_url']}")
+    console.print(f"  Status: {task.status}")
+    console.print(f"  Repository: {task.repository_url}")
 
 
 @task_app.command("list")
@@ -137,25 +136,23 @@ def get_task(task_id: str = typer.Argument(..., help="Task ID")):
     task = ApiClientService.get_task(task_id)
 
     # Calculate duration
-    created = datetime.fromisoformat(task["created_at"].replace("Z", "+00:00"))
-    updated = datetime.fromisoformat(task["updated_at"].replace("Z", "+00:00"))
-    duration = updated - created
+    duration = task.updated_at - task.created_at
     duration_str = f"{duration.total_seconds():.1f}s"
 
-    console.print(f"[bold]Task {task['id']}[/bold]")
-    console.print(f"  Status: {task['status']}")
-    console.print(f"  Repository: {task['repository_url']}")
-    console.print(f"  Created: {task['created_at']}")
-    console.print(f"  Updated: {task['updated_at']}")
+    console.print(f"[bold]Task {task.id}[/bold]")
+    console.print(f"  Status: {task.status}")
+    console.print(f"  Repository: {task.repository_url}")
+    console.print(f"  Created: {task.created_at}")
+    console.print(f"  Updated: {task.updated_at}")
     console.print(f"  Duration: {duration_str}")
 
-    if task.get("session_id"):
-        console.print(f"  Session: {task['session_id']}")
+    if task.session_id:
+        console.print(f"  Session: {task.session_id}")
 
-    console.print(f"\n[bold]Prompt:[/bold]\n{task['prompt']}")
+    console.print(f"\n[bold]Prompt:[/bold]\n{task.prompt}")
 
-    if task.get("result"):
-        console.print(f"\n[bold]Result:[/bold]\n{task['result']}")
+    if task.result:
+        console.print(f"\n[bold]Result:[/bold]\n{task.result}")
 
 
 @task_app.command("logs")
@@ -192,13 +189,13 @@ def wait_task(
     try:
         task = ApiClientService.wait_for_task(task_id, timeout=timeout)
 
-        status = task["status"]
+        status = task.status
         if status == "completed":
             console.print("[green]✓[/green] Task completed")
         else:
             console.print(f"[red]✗[/red] Task {status}")
-            if task.get("result"):
-                console.print(f"  {task['result']}")
+            if task.result:
+                console.print(f"  {task.result}")
     except TimeoutError:
         console.print(f"[red]✗[/red] Timeout after {timeout}s")
         raise typer.Exit(1) from None

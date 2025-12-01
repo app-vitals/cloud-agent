@@ -53,8 +53,10 @@ Client → FastAPI → TaskService.create_task()
 
 **File Extraction:**
 - Modified files from completed tasks stored in: `logs/tasks/{task_id}/files/`
-- Only files detected by `git status --porcelain` are extracted
+- **IMPORTANT**: Only *uncommitted* files detected by `git status --porcelain` are extracted
 - Files over 10MB are skipped
+- **For file extraction to work**: Do NOT commit changes - leave them uncommitted
+- **For PR work**: DO commit AND push (otherwise work is lost when sandbox terminates)
 
 **Session Resumption:**
 - Parent task's session file is restored to Claude's directory before running
