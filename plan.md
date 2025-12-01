@@ -753,6 +753,14 @@ Ran 6 comprehensive tests - all passed! See `SDK_MIGRATION_PLAN.md` for details.
 **Note**: Deliberately skipping task-based API keys - account-based makes more sense for real usage.
 
 ### Phase 6: Enhancements (Future)
+- [ ] **Live log streaming for running tasks**
+  - Problem: Currently can only see logs after task completes/fails
+  - Solution: When `GET /tasks/{task_id}/logs` is called for running task:
+    - Reconnect to existing sandbox using `Sandbox.connect(task.sandbox_id)`
+    - Extract latest session file from `/home/user/.claude/projects/-home-user-repo/*.jsonl`
+    - Return live logs instead of waiting for task completion
+  - Benefits: Debug hanging tasks, monitor progress in real-time
+  - Implementation: Update `TaskService.get_task_logs()` to check task status
 - [ ] Add sandbox provider switching support (E2B fallback)
 - [ ] Web UI for task management and monitoring
 - [ ] Webhooks for task completion notifications
