@@ -88,7 +88,7 @@ def get_current_repo() -> tuple[str, str]:
 def create_task(
     prompt: str = typer.Argument(..., help="Natural language prompt for the task"),
     repo: str = typer.Option(
-        None, "--repo", help="Repository URL (defaults to current git repo)"
+        None, "--repo", help="Repository URL or org/name (defaults to current git repo)"
     ),
 ):
     """Create a new task."""
@@ -96,7 +96,11 @@ def create_task(
     if repo is None:
         repo_url, _ = get_current_repo()
     else:
-        repo_url = repo
+        # If repo doesn't start with http/git, assume it's org/name format
+        if not repo.startswith(("http://", "https://", "git@")):
+            repo_url = f"https://github.com/{repo}.git"
+        else:
+            repo_url = repo
 
     with get_client() as client:
         response = client.post(
@@ -382,7 +386,7 @@ def apply_task(
 def review_pr(
     pr_number: int = typer.Argument(..., help="PR number to review"),
     repo: str = typer.Option(
-        None, "--repo", help="GitHub repo (org/name, defaults to current git repo)"
+        None, "--repo", help="Repository URL or org/name (defaults to current git repo)"
     ),
 ):
     """Review a GitHub pull request."""
@@ -390,8 +394,20 @@ def review_pr(
     if repo is None:
         repo_url, org_repo = get_current_repo()
     else:
-        repo_url = f"https://github.com/{repo}.git"
-        org_repo = repo
+        # If repo doesn't start with http/git, assume it's org/name format
+        if not repo.startswith(("http://", "https://", "git@")):
+            repo_url = f"https://github.com/{repo}.git"
+            org_repo = repo
+        else:
+            # Parse org/repo from full URL
+            match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", repo)
+            if not match:
+                console.print("[red]✗[/red] Could not parse GitHub repo from URL")
+                console.print(f"  URL: {repo}")
+                raise typer.Exit(1)
+            org_repo = match.group(1)
+            # Normalize to HTTPS
+            repo_url = f"https://github.com/{org_repo}.git"
 
     pr_url = f"https://github.com/{org_repo}/pull/{pr_number}"
 

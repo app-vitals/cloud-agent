@@ -142,7 +142,8 @@ This enables Claude Code to execute complex prompts like:
 # Create a task (detects current repo automatically)
 ca task create "Fix the bug in auth module"
 
-# Or specify a different repository
+# Or specify a different repository (org/name or full URL)
+ca task create "Fix the bug in auth module" --repo myorg/myapp
 ca task create "Fix the bug in auth module" --repo https://github.com/myorg/myapp.git
 
 # Wait for completion
@@ -166,8 +167,9 @@ ca task apply <task-id> --dry-run
 # Review a pull request (detects current repo automatically)
 ca pr review 123
 
-# Or review a PR from a different repository
+# Or review a PR from a different repository (org/name or full URL)
 ca pr review 123 --repo myorg/myapp
+ca pr review 123 --repo https://github.com/myorg/myapp.git
 ```
 
 ### API Examples
