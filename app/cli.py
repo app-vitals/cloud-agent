@@ -1,7 +1,6 @@
 """Cloud Agent CLI - Simple command-line interface for cloud-agent API."""
 
 import json
-import re
 import subprocess
 from datetime import datetime
 from pathlib import Path

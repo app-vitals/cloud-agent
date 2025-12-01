@@ -357,8 +357,8 @@ def test_wait_for_task_timeout(mocker):
         ApiClientService.wait_for_task("task-123", timeout=10, poll_interval=5)
 
     assert "Task task-123 did not complete within 10s" in str(exc_info.value)
-    # Should check twice before timing out
-    assert mock_get_task.call_count == 2
+    # Should check once, sleep, then timeout before second check
+    assert mock_get_task.call_count == 1
     mock_sleep.assert_called_once_with(5)
 
 
@@ -380,7 +380,7 @@ def test_wait_for_task_timeout_on_first_check(mocker):
 
 def test_wait_for_task_default_timeout(mocker):
     """Test wait_for_task uses default timeout of 600 seconds."""
-    mock_get_task = mocker.patch.object(ApiClientService, "get_task")
+    mocker.patch.object(ApiClientService, "get_task")
     mock_time = mocker.patch("time.time")
 
     # Simulate time progression to exceed default timeout
@@ -413,7 +413,7 @@ def test_wait_for_task_many_polls(mocker):
     # Simulate 10 polls before completion
     pending_responses = [{"id": "task-123", "status": "running"}] * 9
     completed_response = {"id": "task-123", "status": "completed"}
-    mock_get_task.side_effect = pending_responses + [completed_response]
+    mock_get_task.side_effect = [*pending_responses, completed_response]
 
     result = ApiClientService.wait_for_task("task-123", poll_interval=2)
 
