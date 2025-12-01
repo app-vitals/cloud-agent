@@ -223,6 +223,106 @@ def wait_task(
             time.sleep(5)
 
 
+@task_app.command("apply")
+def apply_task(
+    task_id: str = typer.Argument(..., help="Task ID to apply"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be applied"),
+    no_resume: bool = typer.Option(False, "--no-resume", help="Skip resuming Claude"),
+):
+    """Apply task results to local directory and resume Claude session."""
+    import subprocess
+    from pathlib import Path
+
+    # 1. Fetch task to verify it's completed
+    with get_client() as client:
+        response = client.get(f"/v1/tasks/{task_id}")
+        response.raise_for_status()
+        task = response.json()
+
+    if task["status"] != "completed":
+        console.print("[red]✗[/red] Task must be completed to apply")
+        console.print(f"  Current status: {task['status']}")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Applying task {task_id}[/bold]\n")
+
+    # 2. Fetch files
+    with get_client() as client:
+        response = client.get(f"/v1/tasks/{task_id}/files")
+        response.raise_for_status()
+        files_data = response.json()
+
+    files = files_data["files"]
+
+    if not files:
+        console.print("[yellow]No files to apply[/yellow]\n")
+    elif dry_run:
+        console.print(f"[bold]Would apply {len(files)} files:[/bold]")
+        for file in files:
+            console.print(f"  {file['path']} ({file['size']} bytes)")
+        console.print()
+    else:
+        # 3. Copy files to current directory
+        for file in files:
+            local_path = Path.cwd() / file["path"]
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            local_path.write_text(file["content"])
+            console.print(f"[green]✓[/green] {file['path']}")
+
+        console.print(f"\n[green]Applied {len(files)} files[/green]\n")
+
+    # 4. Fetch session data
+    try:
+        with get_client() as client:
+            response = client.get(f"/v1/tasks/{task_id}/session")
+            response.raise_for_status()
+            session_data = response.json()
+    except Exception as e:
+        console.print(f"[yellow]⚠[/yellow] Could not fetch session: {e}\n")
+        return
+
+    session_id = session_data["session_id"]
+    session_content = session_data["session_data"]
+
+    if not session_id:
+        console.print("[yellow]⚠[/yellow] No session ID available\n")
+        return
+
+    if dry_run:
+        console.print(f"[bold]Would resume Claude session:[/bold] {session_id}")
+        return
+
+    # 5. Write session to Claude's directory
+    # Determine project name from current directory
+    cwd = Path.cwd()
+    project_slug = str(cwd).replace("/", "-")
+
+    # Write to Claude's session directory
+    claude_dir = Path.home() / ".claude" / "projects" / project_slug
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    session_file = claude_dir / f"{session_id}.jsonl"
+    session_file.write_text(session_content)
+
+    console.print(f"[dim]Session saved: {session_file}[/dim]\n")
+
+    # 6. Launch Claude in resume mode (if not --no-resume)
+    if not no_resume:
+        console.print(f"[bold]Resuming Claude session {session_id}...[/bold]\n")
+        try:
+            # Launch Claude without headless mode or output format flags
+            # This opens interactive Claude UI
+            subprocess.run(["claude", "--resume", session_id], cwd=cwd, check=True)
+        except FileNotFoundError as e:
+            console.print(
+                "[red]✗[/red] Claude CLI not found. Install it first:\n"
+                "  https://claude.com/claude-code"
+            )
+            raise typer.Exit(1) from e
+        except subprocess.CalledProcessError as e:
+            console.print(f"[red]✗[/red] Claude failed with exit code {e.returncode}")
+            raise typer.Exit(1) from e
+
+
 @pr_app.command("review")
 def review_pr(
     pr_number: int = typer.Argument(..., help="PR number to review"),

@@ -60,6 +60,30 @@ class TaskLogListResponse(BaseModel):
     offset: int
 
 
+class TaskFileResponse(BaseModel):
+    """Response model for a single file."""
+
+    path: str
+    content: str
+    size: int
+
+
+class TaskFilesResponse(BaseModel):
+    """Response model for task files."""
+
+    task_id: str
+    files: list[TaskFileResponse]
+    total: int
+
+
+class TaskSessionResponse(BaseModel):
+    """Response model for task session data."""
+
+    task_id: str
+    session_id: str
+    session_data: str
+
+
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(task_data: TaskCreate, api_key: str = Depends(verify_api_key)):
     """Create a new task."""
@@ -164,4 +188,52 @@ def get_task_logs(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/tasks/{task_id}/files", response_model=TaskFilesResponse)
+def get_task_files(task_id: UUID, api_key: str = Depends(verify_api_key)):
+    """Get modified files from a completed task."""
+    try:
+        files = TaskService.get_task_files(task_id)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    file_responses = [
+        TaskFileResponse(
+            path=f["path"],
+            content=f["content"],
+            size=f["size"],
+        )
+        for f in files
+    ]
+
+    return TaskFilesResponse(
+        task_id=str(task_id), files=file_responses, total=len(files)
+    )
+
+
+@router.get("/tasks/{task_id}/session", response_model=TaskSessionResponse)
+def get_task_session(task_id: UUID, api_key: str = Depends(verify_api_key)):
+    """Get session data for resuming a task locally."""
+    try:
+        session_id, session_data = TaskService.get_task_session(task_id)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+    return TaskSessionResponse(
+        task_id=str(task_id),
+        session_id=session_id,
+        session_data=session_data,
     )

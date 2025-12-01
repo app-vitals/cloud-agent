@@ -1,5 +1,6 @@
 """Tests for task API endpoints."""
 
+from app.services import TaskService
 from tests.conftest import create_test_task
 
 
@@ -175,3 +176,101 @@ def test_get_task_logs_empty(test_client, auth_headers, mocker):
     data = response.json()
     assert data["total"] == 0
     assert len(data["logs"]) == 0
+
+
+def test_get_task_files(test_client, auth_headers, mocker):
+    """Test GET /v1/tasks/{task_id}/files."""
+    from pathlib import Path
+
+    task = create_test_task(prompt="Test task")
+    TaskService.update_task_status(task.id, "completed")
+
+    # Mock files directory
+    files_dir = Path("logs/tasks") / str(task.id) / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    (files_dir / "test.py").write_text("print('hello')")
+    (files_dir / "subdir").mkdir()
+    (files_dir / "subdir" / "test2.py").write_text("print('world')")
+
+    try:
+        response = test_client.get(f"/v1/tasks/{task.id}/files", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["task_id"] == str(task.id)
+        assert data["total"] == 2
+        assert len(data["files"]) == 2
+
+        # Check file contents
+        file_paths = {f["path"] for f in data["files"]}
+        assert "test.py" in file_paths
+        assert "subdir/test2.py" in file_paths or "subdir\\test2.py" in file_paths
+    finally:
+        # Cleanup
+        import shutil
+
+        shutil.rmtree(files_dir.parent, ignore_errors=True)
+
+
+def test_get_task_files_not_completed(test_client, auth_headers):
+    """Test GET /v1/tasks/{task_id}/files with non-completed task."""
+    task = create_test_task(prompt="Running task")
+    TaskService.update_task_status(task.id, "running")
+
+    response = test_client.get(f"/v1/tasks/{task.id}/files", headers=auth_headers)
+
+    assert response.status_code == 400
+    assert "must be completed" in response.json()["detail"]
+
+
+def test_get_task_files_no_files(test_client, auth_headers):
+    """Test GET /v1/tasks/{task_id}/files with no files."""
+    task = create_test_task(prompt="Test task")
+    TaskService.update_task_status(task.id, "completed")
+
+    response = test_client.get(f"/v1/tasks/{task.id}/files", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0
+    assert len(data["files"]) == 0
+
+
+def test_get_task_session(test_client, auth_headers):
+    """Test GET /v1/tasks/{task_id}/session."""
+    from pathlib import Path
+
+    task = create_test_task(prompt="Test task")
+    TaskService.update_task_status(task.id, "completed", session_id="test-session-123")
+
+    # Mock session file
+    session_dir = Path("logs/tasks") / str(task.id)
+    session_dir.mkdir(parents=True, exist_ok=True)
+    session_file = session_dir / "session.jsonl"
+    session_content = '{"test": "data"}\n'
+    session_file.write_text(session_content)
+
+    try:
+        response = test_client.get(f"/v1/tasks/{task.id}/session", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["task_id"] == str(task.id)
+        assert data["session_id"] == "test-session-123"
+        assert data["session_data"] == session_content
+    finally:
+        # Cleanup
+        import shutil
+
+        shutil.rmtree(session_dir, ignore_errors=True)
+
+
+def test_get_task_session_not_found(test_client, auth_headers):
+    """Test GET /v1/tasks/{task_id}/session with missing session file."""
+    task = create_test_task(prompt="Test task")
+    TaskService.update_task_status(task.id, "completed")
+
+    response = test_client.get(f"/v1/tasks/{task.id}/session", headers=auth_headers)
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
