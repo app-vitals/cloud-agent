@@ -1,6 +1,8 @@
 """Cloud Agent CLI - Simple command-line interface for cloud-agent API."""
 
 import os
+import re
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -37,16 +39,69 @@ def get_client() -> httpx.Client:
     )
 
 
+def get_current_repo() -> tuple[str, str]:
+    """Get current git repository URL and org/name.
+
+    Returns:
+        tuple[str, str]: (repository_url, org/name)
+
+    Raises:
+        typer.Exit: If not in a git repository or no remote found
+    """
+    try:
+        # Get remote URL
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        remote_url = result.stdout.strip()
+
+        # Parse org/name from URL
+        # Handles both HTTPS and SSH URLs:
+        # - https://github.com/org/repo.git
+        # - git@github.com:org/repo.git
+        match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", remote_url)
+        if not match:
+            console.print("[red]✗[/red] Could not parse GitHub repo from remote URL")
+            console.print(f"  Remote: {remote_url}")
+            raise typer.Exit(1)
+
+        org_repo = match.group(1)
+
+        # Ensure it ends with .git for repository_url
+        if not remote_url.endswith(".git"):
+            remote_url = f"{remote_url}.git"
+
+        return remote_url, org_repo
+
+    except subprocess.CalledProcessError:
+        console.print(
+            "[red]✗[/red] Not in a git repository or no remote 'origin' found"
+        )
+        console.print("  Either run from a git repo or specify --repo explicitly")
+        raise typer.Exit(1) from None
+
+
 @task_app.command("create")
 def create_task(
     prompt: str = typer.Argument(..., help="Natural language prompt for the task"),
-    repo: str = typer.Option(..., "--repo", help="Repository URL"),
+    repo: str = typer.Option(
+        None, "--repo", help="Repository URL (defaults to current git repo)"
+    ),
 ):
     """Create a new task."""
+    # If no repo specified, detect from current directory
+    if repo is None:
+        repo_url, _ = get_current_repo()
+    else:
+        repo_url = repo
+
     with get_client() as client:
         response = client.post(
             "/v1/tasks",
-            json={"prompt": prompt, "repository_url": repo},
+            json={"prompt": prompt, "repository_url": repo_url},
         )
         response.raise_for_status()
         task = response.json()
@@ -326,12 +381,19 @@ def apply_task(
 @pr_app.command("review")
 def review_pr(
     pr_number: int = typer.Argument(..., help="PR number to review"),
-    repo: str = typer.Option(..., "--repo", help="GitHub repo (org/name)"),
+    repo: str = typer.Option(
+        None, "--repo", help="GitHub repo (org/name, defaults to current git repo)"
+    ),
 ):
     """Review a GitHub pull request."""
+    # If no repo specified, detect from current directory
+    if repo is None:
+        repo_url, org_repo = get_current_repo()
+    else:
+        repo_url = f"https://github.com/{repo}.git"
+        org_repo = repo
 
-    repo_url = f"https://github.com/{repo}.git"
-    pr_url = f"https://github.com/{repo}/pull/{pr_number}"
+    pr_url = f"https://github.com/{org_repo}/pull/{pr_number}"
 
     prompt = f"""Review pull request #{pr_number}:
 
@@ -343,7 +405,7 @@ def review_pr(
 Provide comprehensive review with actionable feedback.
 """
 
-    console.print(f"[bold]Creating PR review task for {repo}#{pr_number}[/bold]")
+    console.print(f"[bold]Creating PR review task for {org_repo}#{pr_number}[/bold]")
 
     with get_client() as client:
         response = client.post(
