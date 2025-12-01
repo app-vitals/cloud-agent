@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from app.api.tasks import TaskResponse
+
 
 class ApiClientService:
     """Service for Cloud Agent API client operations."""
@@ -40,7 +42,7 @@ class ApiClientService:
         repository_url: str,
         parent_task_id: str | None = None,
         client: httpx.Client | None = None,
-    ) -> dict[str, Any]:
+    ) -> TaskResponse:
         """Create a new task.
 
         Args:
@@ -50,7 +52,7 @@ class ApiClientService:
             client: Optional httpx.Client to use (if None, creates new client)
 
         Returns:
-            Task data as dict with id, status, prompt, repository_url, etc.
+            TaskResponse object with id, status, prompt, repository_url, etc.
 
         Raises:
             httpx.HTTPStatusError: If API request fails
@@ -69,13 +71,13 @@ class ApiClientService:
 
             response = client.post("/v1/tasks", json=payload)
             response.raise_for_status()
-            return response.json()
+            return TaskResponse(**response.json())
         finally:
             if should_close:
                 client.close()
 
     @staticmethod
-    def get_task(task_id: str, client: httpx.Client | None = None) -> dict[str, Any]:
+    def get_task(task_id: str, client: httpx.Client | None = None) -> TaskResponse:
         """Get task by ID.
 
         Args:
@@ -83,7 +85,7 @@ class ApiClientService:
             client: Optional httpx.Client to use (if None, creates new client)
 
         Returns:
-            Task data as dict with id, status, prompt, repository_url, etc.
+            TaskResponse object with id, status, prompt, repository_url, etc.
 
         Raises:
             httpx.HTTPStatusError: If API request fails (e.g., 404 for not found)
@@ -95,7 +97,7 @@ class ApiClientService:
         try:
             response = client.get(f"/v1/tasks/{task_id}")
             response.raise_for_status()
-            return response.json()
+            return TaskResponse(**response.json())
         finally:
             if should_close:
                 client.close()
@@ -105,7 +107,7 @@ class ApiClientService:
         task_id: str,
         timeout: int = 600,
         poll_interval: int = 5,
-    ) -> dict[str, Any]:
+    ) -> TaskResponse:
         """Wait for task to complete with polling.
 
         Args:
@@ -114,7 +116,7 @@ class ApiClientService:
             poll_interval: Time between status checks in seconds (default: 5)
 
         Returns:
-            Final task data when completed or failed
+            Final TaskResponse when completed or failed
 
         Raises:
             TimeoutError: If task doesn't complete within timeout period
@@ -127,7 +129,7 @@ class ApiClientService:
                 raise TimeoutError(f"Task {task_id} did not complete within {timeout}s")
 
             task = ApiClientService.get_task(task_id)
-            status = task["status"]
+            status = task.status
 
             if status in ["completed", "failed", "cancelled"]:
                 return task
