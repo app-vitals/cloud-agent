@@ -275,19 +275,26 @@ For multi-step work on a PR, there are two approaches:
 ca task create "Create UserService in app/services/user.py with get_user() method. Create PR."
 
 # Task 2: Add to same PR (no resume needed!)
-ca task create "Checkout PR branch and add update_user() method to UserService. Add tests. Push your commit to the PR branch."
+ca task create "Use 'gh pr checkout 14' to checkout the PR. Add update_user() method to UserService. Add tests. Push your commit to the PR branch."
 
 # Task 3: More additions
-ca task create "Checkout PR branch and add delete_user() method to UserService. Add tests. Push your commit to the PR branch."
+ca task create "Use 'gh pr checkout 14' to checkout the PR. Add delete_user() method to UserService. Add tests. Push your commit to the PR branch."
 
 # Final: Update PR description with all changes
-ca task create "Checkout PR branch and update PR title and description to summarize all UserService methods added."
+ca task create "Use 'gh pr checkout 14' to checkout the PR. Update PR title and description to summarize all UserService methods added."
 ```
 
-**CRITICAL: Always explicitly say "Push your commit to the PR branch"**
-- If you only say "Commit changes", the agent will commit locally but NOT push
-- Work is lost when the sandbox terminates if not pushed
-- Be explicit in every task prompt that should update a PR
+**CRITICAL Best Practices:**
+
+1. **Use gh CLI for PR checkout** - Say "Use 'gh pr checkout N'" instead of specifying branch names
+   - Branch names can be wrong or change
+   - gh CLI ensures you're always on the correct PR branch
+   - Prevents accidentally creating duplicate branches
+
+2. **Always explicitly say "Push your commit to the PR branch"**
+   - If you only say "Commit changes", the agent will commit locally but NOT push
+   - Work is lost when the sandbox terminates if not pushed
+   - Be explicit in every task prompt that should update a PR
 
 **Why Branch-Based is Better:**
 - Each task runs in ~3-5 minutes vs 5+ minutes with resume

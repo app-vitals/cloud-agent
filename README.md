@@ -160,9 +160,11 @@ ca task resume <parent-task-id> "Continue by adding tests for the fix"
 
 # TIP: For multi-step work on a PR, consider branch-based workflow instead:
 # Task 1: "Create feature X. Create PR."
-# Task 2: "Checkout PR branch and add feature Y. Push your commit to the PR branch."
+# Task 2: "Use 'gh pr checkout 14' to checkout the PR. Add feature Y. Push your commit to the PR branch."
 # This is faster than resuming (no context overhead) and still builds on previous work.
-# IMPORTANT: Always say "Push your commit" - otherwise work is lost when sandbox terminates!
+# IMPORTANT:
+# - Use 'gh pr checkout N' instead of branch names to avoid creating duplicate branches
+# - Always say "Push your commit" - otherwise work is lost when sandbox terminates!
 
 # Apply task results locally (copies files + resumes session)
 ca task apply <task-id>
