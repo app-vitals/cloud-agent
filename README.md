@@ -154,6 +154,12 @@ ca task logs <task-id>
 # Resume from a previous task
 ca task resume <parent-task-id> "Continue by adding tests for the fix"
 
+# Apply task results locally (copies files + resumes session)
+ca task apply <task-id>
+
+# Preview what would be applied
+ca task apply <task-id> --dry-run
+
 # Review a pull request
 ca pr review 123 --repo myorg/myapp
 ```
