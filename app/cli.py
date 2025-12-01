@@ -1,10 +1,7 @@
 """Cloud Agent CLI - Simple command-line interface for cloud-agent API."""
 
 import json
-import os
-import re
 import subprocess
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +10,9 @@ import typer
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
+
+from app.services.api_client import ApiClientService
+from app.services.git import GitError, GitService
 
 # Load .env file from project root (parent of app/ directory)
 env_path = Path(__file__).parent.parent / ".env"
@@ -26,18 +26,10 @@ app.add_typer(pr_app, name="pr")
 
 console = Console()
 
-# Configuration
-API_BASE_URL = os.getenv("CLOUD_AGENT_URL", "http://localhost:8000")
-API_KEY = os.getenv("API_SECRET_KEY")
-
 
 def get_client() -> httpx.Client:
     """Get configured HTTP client."""
-    return httpx.Client(
-        base_url=API_BASE_URL,
-        headers={"X-API-Key": API_KEY},
-        timeout=30.0,
-    )
+    return ApiClientService.get_client()
 
 
 def get_current_repo() -> tuple[str, str]:
@@ -50,37 +42,9 @@ def get_current_repo() -> tuple[str, str]:
         typer.Exit: If not in a git repository or no remote found
     """
     try:
-        # Get remote URL
-        result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        remote_url = result.stdout.strip()
-
-        # Parse org/name from URL
-        # Handles both HTTPS and SSH URLs:
-        # - https://github.com/org/repo.git
-        # - git@github.com:org/repo.git
-        match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", remote_url)
-        if not match:
-            console.print("[red]✗[/red] Could not parse GitHub repo from remote URL")
-            console.print(f"  Remote: {remote_url}")
-            raise typer.Exit(1)
-
-        org_repo = match.group(1)
-
-        # Convert to HTTPS URL for use with GitHub token authentication
-        # SSH URLs (git@github.com:org/repo.git) won't work with token auth
-        repository_url = f"https://github.com/{org_repo}.git"
-
-        return repository_url, org_repo
-
-    except subprocess.CalledProcessError:
-        console.print(
-            "[red]✗[/red] Not in a git repository or no remote 'origin' found"
-        )
+        return GitService.get_current_repo()
+    except GitError as e:
+        console.print(f"[red]✗[/red] {e}")
         console.print("  Either run from a git repo or specify --repo explicitly")
         raise typer.Exit(1) from None
 
@@ -97,19 +61,9 @@ def create_task(
     if repo is None:
         repo_url, _ = get_current_repo()
     else:
-        # If repo doesn't start with http/git, assume it's org/name format
-        if not repo.startswith(("http://", "https://", "git@")):
-            repo_url = f"https://github.com/{repo}.git"
-        else:
-            repo_url = repo
+        repo_url = GitService.normalize_repo_url(repo)
 
-    with get_client() as client:
-        response = client.post(
-            "/v1/tasks",
-            json={"prompt": prompt, "repository_url": repo_url},
-        )
-        response.raise_for_status()
-        task = response.json()
+    task = ApiClientService.create_task(prompt=prompt, repository_url=repo_url)
 
     console.print(f"[green]✓[/green] Task created: [bold]{task['id']}[/bold]")
     console.print(f"  Status: {task['status']}")
@@ -126,23 +80,14 @@ def resume_task(
 ):
     """Resume a task from a previous task."""
     # Get parent task to get repository URL
-    with get_client() as client:
-        response = client.get(f"/v1/tasks/{parent_task_id}")
-        response.raise_for_status()
-        parent_task = response.json()
+    parent_task = ApiClientService.get_task(parent_task_id)
 
     # Create new task with parent_task_id
-    with get_client() as client:
-        response = client.post(
-            "/v1/tasks",
-            json={
-                "prompt": prompt,
-                "repository_url": parent_task["repository_url"],
-                "parent_task_id": parent_task_id,
-            },
-        )
-        response.raise_for_status()
-        task = response.json()
+    task = ApiClientService.create_task(
+        prompt=prompt,
+        repository_url=parent_task["repository_url"],
+        parent_task_id=parent_task_id,
+    )
 
     console.print(f"[green]✓[/green] Resumed task created: [bold]{task['id']}[/bold]")
     console.print(f"  Parent: [dim]{parent_task_id}[/dim]")
@@ -192,10 +137,7 @@ def list_tasks(
 @task_app.command("get")
 def get_task(task_id: str = typer.Argument(..., help="Task ID")):
     """Get task details."""
-    with get_client() as client:
-        response = client.get(f"/v1/tasks/{task_id}")
-        response.raise_for_status()
-        task = response.json()
+    task = ApiClientService.get_task(task_id)
 
     # Calculate duration
     created = datetime.fromisoformat(task["created_at"].replace("Z", "+00:00"))
@@ -253,32 +195,19 @@ def wait_task(
     timeout: int = typer.Option(600, "--timeout", "-t", help="Timeout in seconds"),
 ):
     """Wait for task to complete."""
-    start_time = time.time()
+    try:
+        task = ApiClientService.wait_for_task(task_id, timeout=timeout)
 
-    with get_client() as client:
-        while True:
-            if time.time() - start_time > timeout:
-                console.print(f"[red]✗[/red] Timeout after {timeout}s")
-                raise typer.Exit(1)
-
-            response = client.get(f"/v1/tasks/{task_id}")
-            response.raise_for_status()
-            task = response.json()
-
-            status = task["status"]
-            console.print(f"Status: {status}...", end="\r")
-
-            if status in ["completed", "failed", "cancelled"]:
-                console.print()  # New line
-                if status == "completed":
-                    console.print("[green]✓[/green] Task completed")
-                else:
-                    console.print(f"[red]✗[/red] Task {status}")
-                    if task.get("result"):
-                        console.print(f"  {task['result']}")
-                break
-
-            time.sleep(5)
+        status = task["status"]
+        if status == "completed":
+            console.print("[green]✓[/green] Task completed")
+        else:
+            console.print(f"[red]✗[/red] Task {status}")
+            if task.get("result"):
+                console.print(f"  {task['result']}")
+    except TimeoutError:
+        console.print(f"[red]✗[/red] Timeout after {timeout}s")
+        raise typer.Exit(1) from None
 
 
 @task_app.command("apply")
@@ -392,18 +321,17 @@ def review_pr(
     else:
         # If repo doesn't start with http/git, assume it's org/name format
         if not repo.startswith(("http://", "https://", "git@")):
-            repo_url = f"https://github.com/{repo}.git"
+            repo_url = GitService.normalize_repo_url(repo)
             org_repo = repo
         else:
             # Parse org/repo from full URL
-            match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", repo)
-            if not match:
+            try:
+                repo_url, org_repo = GitService.parse_github_url(repo)
+            except ValueError as e:
                 console.print("[red]✗[/red] Could not parse GitHub repo from URL")
                 console.print(f"  URL: {repo}")
-                raise typer.Exit(1)
-            org_repo = match.group(1)
-            # Normalize to HTTPS
-            repo_url = f"https://github.com/{org_repo}.git"
+                console.print(f"  Error: {e}")
+                raise typer.Exit(1) from None
 
     pr_url = f"https://github.com/{org_repo}/pull/{pr_number}"
 
