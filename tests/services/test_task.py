@@ -1,6 +1,7 @@
 """Tests for TaskService."""
 
 import json
+from uuid import uuid4
 
 import pytest
 
@@ -38,8 +39,6 @@ def test_get_task_by_id():
 
 def test_get_task_by_id_not_found():
     """Test getting a non-existent task."""
-    from uuid import uuid4
-
     non_existent_id = uuid4()
 
     with pytest.raises(NotFoundError) as exc_info:
@@ -101,8 +100,6 @@ def test_update_task_status():
 
 def test_update_task_status_not_found():
     """Test updating status of non-existent task."""
-    from uuid import uuid4
-
     non_existent_id = uuid4()
 
     with pytest.raises(NotFoundError) as exc_info:

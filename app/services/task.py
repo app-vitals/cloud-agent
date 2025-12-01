@@ -183,8 +183,6 @@ class TaskService:
             NotFoundError: If task not found
             ValueError: If task is not completed
         """
-        from pathlib import Path
-
         task = TaskService.get_task_by_id(task_id)
 
         if task.status != "completed":
@@ -222,8 +220,6 @@ class TaskService:
         Raises:
             NotFoundError: If task or session file not found
         """
-        from pathlib import Path
-
         task = TaskService.get_task_by_id(task_id)
 
         session_file = Path("logs/tasks") / str(task_id) / "session.jsonl"

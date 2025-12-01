@@ -1,5 +1,8 @@
 """Tests for task API endpoints."""
 
+from pathlib import Path
+from uuid import uuid4
+
 from app.services import TaskService
 from tests.conftest import create_test_task
 
@@ -42,8 +45,6 @@ def test_get_task(test_client, auth_headers):
 
 def test_get_task_not_found(test_client, auth_headers):
     """Test GET /v1/tasks/{task_id} with non-existent ID."""
-    from uuid import uuid4
-
     non_existent_id = uuid4()
     response = test_client.get(f"/v1/tasks/{non_existent_id}", headers=auth_headers)
 
@@ -149,8 +150,6 @@ def test_get_task_logs(test_client, auth_headers, mocker):
 
 def test_get_task_logs_not_found(test_client, auth_headers):
     """Test GET /v1/tasks/{task_id}/logs with non-existent task."""
-    from uuid import uuid4
-
     non_existent_id = uuid4()
     response = test_client.get(
         f"/v1/tasks/{non_existent_id}/logs", headers=auth_headers
@@ -180,8 +179,6 @@ def test_get_task_logs_empty(test_client, auth_headers, mocker):
 
 def test_get_task_files(test_client, auth_headers, mocker):
     """Test GET /v1/tasks/{task_id}/files."""
-    from pathlib import Path
-
     task = create_test_task(prompt="Test task")
     TaskService.update_task_status(task.id, "completed")
 
@@ -238,8 +235,6 @@ def test_get_task_files_no_files(test_client, auth_headers):
 
 def test_get_task_session(test_client, auth_headers):
     """Test GET /v1/tasks/{task_id}/session."""
-    from pathlib import Path
-
     task = create_test_task(prompt="Test task")
     TaskService.update_task_status(task.id, "completed", session_id="test-session-123")
 

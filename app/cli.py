@@ -1,5 +1,6 @@
 """Cloud Agent CLI - Simple command-line interface for cloud-agent API."""
 
+import json
 import os
 import re
 import subprocess
@@ -240,8 +241,6 @@ def get_logs(
     console.print(f"[bold]Logs for task {task_id}[/bold] ({data['total']} messages)\n")
 
     # Print raw logs as JSON for simplicity and future-proofing
-    import json
-
     for i, log in enumerate(logs, 1):
         console.print(f"[dim]Message {i}:[/dim]")
         console.print(json.dumps(log, indent=2))
@@ -289,9 +288,6 @@ def apply_task(
     no_resume: bool = typer.Option(False, "--no-resume", help="Skip resuming Claude"),
 ):
     """Apply task results to local directory and resume Claude session."""
-    import subprocess
-    from pathlib import Path
-
     # 1. Fetch task to verify it's completed
     with get_client() as client:
         response = client.get(f"/v1/tasks/{task_id}")
