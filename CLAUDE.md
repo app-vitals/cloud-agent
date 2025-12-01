@@ -212,10 +212,13 @@ Services are started in sandbox with: `start-services`
 
 ### Endpoint Structure
 ```
-POST   /v1/tasks          - Create task (queues to Celery)
-GET    /v1/tasks          - List tasks with pagination
-GET    /v1/tasks/{id}     - Get task by ID
-GET    /health            - Health check
+POST   /v1/tasks                - Create task (queues to Celery)
+GET    /v1/tasks                - List tasks with pagination
+GET    /v1/tasks/{id}           - Get task by ID
+GET    /v1/tasks/{id}/logs      - Get task execution logs
+GET    /v1/tasks/{id}/files     - Get modified files from completed task
+GET    /v1/tasks/{id}/session   - Get session data for local resumption
+GET    /health                  - Health check
 ```
 
 ## Development Philosophy

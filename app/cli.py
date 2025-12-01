@@ -1,6 +1,9 @@
 """Cloud Agent CLI - Simple command-line interface for cloud-agent API."""
 
+import json
 import os
+import re
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -37,16 +40,73 @@ def get_client() -> httpx.Client:
     )
 
 
+def get_current_repo() -> tuple[str, str]:
+    """Get current git repository URL and org/name.
+
+    Returns:
+        tuple[str, str]: (repository_url, org/name)
+
+    Raises:
+        typer.Exit: If not in a git repository or no remote found
+    """
+    try:
+        # Get remote URL
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        remote_url = result.stdout.strip()
+
+        # Parse org/name from URL
+        # Handles both HTTPS and SSH URLs:
+        # - https://github.com/org/repo.git
+        # - git@github.com:org/repo.git
+        match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", remote_url)
+        if not match:
+            console.print("[red]✗[/red] Could not parse GitHub repo from remote URL")
+            console.print(f"  Remote: {remote_url}")
+            raise typer.Exit(1)
+
+        org_repo = match.group(1)
+
+        # Convert to HTTPS URL for use with GitHub token authentication
+        # SSH URLs (git@github.com:org/repo.git) won't work with token auth
+        repository_url = f"https://github.com/{org_repo}.git"
+
+        return repository_url, org_repo
+
+    except subprocess.CalledProcessError:
+        console.print(
+            "[red]✗[/red] Not in a git repository or no remote 'origin' found"
+        )
+        console.print("  Either run from a git repo or specify --repo explicitly")
+        raise typer.Exit(1) from None
+
+
 @task_app.command("create")
 def create_task(
     prompt: str = typer.Argument(..., help="Natural language prompt for the task"),
-    repo: str = typer.Option(..., "--repo", help="Repository URL"),
+    repo: str = typer.Option(
+        None, "--repo", help="Repository URL or org/name (defaults to current git repo)"
+    ),
 ):
     """Create a new task."""
+    # If no repo specified, detect from current directory
+    if repo is None:
+        repo_url, _ = get_current_repo()
+    else:
+        # If repo doesn't start with http/git, assume it's org/name format
+        if not repo.startswith(("http://", "https://", "git@")):
+            repo_url = f"https://github.com/{repo}.git"
+        else:
+            repo_url = repo
+
     with get_client() as client:
         response = client.post(
             "/v1/tasks",
-            json={"prompt": prompt, "repository_url": repo},
+            json={"prompt": prompt, "repository_url": repo_url},
         )
         response.raise_for_status()
         task = response.json()
@@ -181,8 +241,6 @@ def get_logs(
     console.print(f"[bold]Logs for task {task_id}[/bold] ({data['total']} messages)\n")
 
     # Print raw logs as JSON for simplicity and future-proofing
-    import json
-
     for i, log in enumerate(logs, 1):
         console.print(f"[dim]Message {i}:[/dim]")
         console.print(json.dumps(log, indent=2))
@@ -223,15 +281,131 @@ def wait_task(
             time.sleep(5)
 
 
+@task_app.command("apply")
+def apply_task(
+    task_id: str = typer.Argument(..., help="Task ID to apply"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be applied"),
+    no_resume: bool = typer.Option(False, "--no-resume", help="Skip resuming Claude"),
+):
+    """Apply task results to local directory and resume Claude session."""
+    # 1. Fetch task to verify it's completed
+    with get_client() as client:
+        response = client.get(f"/v1/tasks/{task_id}")
+        response.raise_for_status()
+        task = response.json()
+
+    if task["status"] != "completed":
+        console.print("[red]✗[/red] Task must be completed to apply")
+        console.print(f"  Current status: {task['status']}")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Applying task {task_id}[/bold]\n")
+
+    # 2. Fetch files
+    with get_client() as client:
+        response = client.get(f"/v1/tasks/{task_id}/files")
+        response.raise_for_status()
+        files_data = response.json()
+
+    files = files_data["files"]
+
+    if not files:
+        console.print("[yellow]No files to apply[/yellow]\n")
+    elif dry_run:
+        console.print(f"[bold]Would apply {len(files)} files:[/bold]")
+        for file in files:
+            console.print(f"  {file['path']} ({file['size']} bytes)")
+        console.print()
+    else:
+        # 3. Copy files to current directory
+        for file in files:
+            local_path = Path.cwd() / file["path"]
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            local_path.write_text(file["content"])
+            console.print(f"[green]✓[/green] {file['path']}")
+
+        console.print(f"\n[green]Applied {len(files)} files[/green]\n")
+
+    # 4. Fetch session data
+    try:
+        with get_client() as client:
+            response = client.get(f"/v1/tasks/{task_id}/session")
+            response.raise_for_status()
+            session_data = response.json()
+    except Exception as e:
+        console.print(f"[yellow]⚠[/yellow] Could not fetch session: {e}\n")
+        return
+
+    session_id = session_data["session_id"]
+    session_content = session_data["session_data"]
+
+    if not session_id:
+        console.print("[yellow]⚠[/yellow] No session ID available\n")
+        return
+
+    if dry_run:
+        console.print(f"[bold]Would resume Claude session:[/bold] {session_id}")
+        return
+
+    # 5. Write session to Claude's directory
+    # Determine project name from current directory
+    cwd = Path.cwd()
+    project_slug = str(cwd).replace("/", "-")
+
+    # Write to Claude's session directory
+    claude_dir = Path.home() / ".claude" / "projects" / project_slug
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    session_file = claude_dir / f"{session_id}.jsonl"
+    session_file.write_text(session_content)
+
+    console.print(f"[dim]Session saved: {session_file}[/dim]\n")
+
+    # 6. Launch Claude in resume mode (if not --no-resume)
+    if not no_resume:
+        console.print(f"[bold]Resuming Claude session {session_id}...[/bold]\n")
+        try:
+            # Launch Claude without headless mode or output format flags
+            # This opens interactive Claude UI
+            subprocess.run(["claude", "--resume", session_id], cwd=cwd, check=True)
+        except FileNotFoundError as e:
+            console.print(
+                "[red]✗[/red] Claude CLI not found. Install it first:\n"
+                "  https://claude.com/claude-code"
+            )
+            raise typer.Exit(1) from e
+        except subprocess.CalledProcessError as e:
+            console.print(f"[red]✗[/red] Claude failed with exit code {e.returncode}")
+            raise typer.Exit(1) from e
+
+
 @pr_app.command("review")
 def review_pr(
     pr_number: int = typer.Argument(..., help="PR number to review"),
-    repo: str = typer.Option(..., "--repo", help="GitHub repo (org/name)"),
+    repo: str = typer.Option(
+        None, "--repo", help="Repository URL or org/name (defaults to current git repo)"
+    ),
 ):
     """Review a GitHub pull request."""
+    # If no repo specified, detect from current directory
+    if repo is None:
+        repo_url, org_repo = get_current_repo()
+    else:
+        # If repo doesn't start with http/git, assume it's org/name format
+        if not repo.startswith(("http://", "https://", "git@")):
+            repo_url = f"https://github.com/{repo}.git"
+            org_repo = repo
+        else:
+            # Parse org/repo from full URL
+            match = re.search(r"github\.com[:/](.+/.+?)(?:\.git)?$", repo)
+            if not match:
+                console.print("[red]✗[/red] Could not parse GitHub repo from URL")
+                console.print(f"  URL: {repo}")
+                raise typer.Exit(1)
+            org_repo = match.group(1)
+            # Normalize to HTTPS
+            repo_url = f"https://github.com/{org_repo}.git"
 
-    repo_url = f"https://github.com/{repo}.git"
-    pr_url = f"https://github.com/{repo}/pull/{pr_number}"
+    pr_url = f"https://github.com/{org_repo}/pull/{pr_number}"
 
     prompt = f"""Review pull request #{pr_number}:
 
@@ -243,7 +417,7 @@ def review_pr(
 Provide comprehensive review with actionable feedback.
 """
 
-    console.print(f"[bold]Creating PR review task for {repo}#{pr_number}[/bold]")
+    console.print(f"[bold]Creating PR review task for {org_repo}#{pr_number}[/bold]")
 
     with get_client() as client:
         response = client.post(

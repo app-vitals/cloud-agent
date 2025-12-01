@@ -2,6 +2,7 @@
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -14,6 +15,15 @@ from app.core.errors import NotFoundError
 from app.models import Task
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TaskFile:
+    """Represents a file from a task."""
+
+    path: str
+    content: str
+    size: int
 
 
 class TaskService:
@@ -168,3 +178,64 @@ class TaskService:
         except Exception as e:
             logger.error(f"Failed to read logs for task {task_id}: {e}")
             return [], 0
+
+    @staticmethod
+    def get_task_files(task_id: UUID) -> list[TaskFile]:
+        """Get modified files from a completed task.
+
+        Args:
+            task_id: Task UUID
+
+        Returns:
+            List of TaskFile objects with path, content, and size
+
+        Raises:
+            NotFoundError: If task not found
+            ValueError: If task is not completed
+        """
+        task = TaskService.get_task_by_id(task_id)
+
+        if task.status != "completed":
+            raise ValueError("Task must be completed to retrieve files")
+
+        files_dir = Path("logs/tasks") / str(task_id) / "files"
+        if not files_dir.exists():
+            return []
+
+        files = []
+        for file_path in files_dir.rglob("*"):
+            if file_path.is_file():
+                relative_path = file_path.relative_to(files_dir)
+                content = file_path.read_text()
+                files.append(
+                    TaskFile(
+                        path=str(relative_path),
+                        content=content,
+                        size=len(content),
+                    )
+                )
+
+        return files
+
+    @staticmethod
+    def get_task_session(task_id: UUID) -> tuple[str, str]:
+        """Get session data for resuming a task locally.
+
+        Args:
+            task_id: Task UUID
+
+        Returns:
+            Tuple of (session_id, session_data)
+
+        Raises:
+            NotFoundError: If task or session file not found
+        """
+        task = TaskService.get_task_by_id(task_id)
+
+        session_file = Path("logs/tasks") / str(task_id) / "session.jsonl"
+        if not session_file.exists():
+            raise NotFoundError(f"Session file not found for task {task_id}")
+
+        session_data = session_file.read_text()
+
+        return task.session_id or "", session_data

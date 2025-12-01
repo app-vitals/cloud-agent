@@ -139,7 +139,11 @@ This enables Claude Code to execute complex prompts like:
 ### CLI Tool
 
 ```bash
-# Create a task
+# Create a task (detects current repo automatically)
+ca task create "Fix the bug in auth module"
+
+# Or specify a different repository (org/name or full URL)
+ca task create "Fix the bug in auth module" --repo myorg/myapp
 ca task create "Fix the bug in auth module" --repo https://github.com/myorg/myapp.git
 
 # Wait for completion
@@ -154,8 +158,18 @@ ca task logs <task-id>
 # Resume from a previous task
 ca task resume <parent-task-id> "Continue by adding tests for the fix"
 
-# Review a pull request
+# Apply task results locally (copies files + resumes session)
+ca task apply <task-id>
+
+# Preview what would be applied
+ca task apply <task-id> --dry-run
+
+# Review a pull request (detects current repo automatically)
+ca pr review 123
+
+# Or review a PR from a different repository (org/name or full URL)
 ca pr review 123 --repo myorg/myapp
+ca pr review 123 --repo https://github.com/myorg/myapp.git
 ```
 
 ### API Examples
