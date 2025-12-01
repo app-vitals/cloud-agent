@@ -2,6 +2,7 @@
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -14,6 +15,15 @@ from app.core.errors import NotFoundError
 from app.models import Task
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TaskFile:
+    """Represents a file from a task."""
+
+    path: str
+    content: str
+    size: int
 
 
 class TaskService:
@@ -170,14 +180,14 @@ class TaskService:
             return [], 0
 
     @staticmethod
-    def get_task_files(task_id: UUID) -> list[dict]:
+    def get_task_files(task_id: UUID) -> list[TaskFile]:
         """Get modified files from a completed task.
 
         Args:
             task_id: Task UUID
 
         Returns:
-            List of file dictionaries with path, content, and size
+            List of TaskFile objects with path, content, and size
 
         Raises:
             NotFoundError: If task not found
@@ -198,11 +208,11 @@ class TaskService:
                 relative_path = file_path.relative_to(files_dir)
                 content = file_path.read_text()
                 files.append(
-                    {
-                        "path": str(relative_path),
-                        "content": content,
-                        "size": len(content),
-                    }
+                    TaskFile(
+                        path=str(relative_path),
+                        content=content,
+                        size=len(content),
+                    )
                 )
 
         return files

@@ -209,9 +209,9 @@ def get_task_files(task_id: UUID, api_key: str = Depends(verify_api_key)):
 
     file_responses = [
         TaskFileResponse(
-            path=f["path"],
-            content=f["content"],
-            size=f["size"],
+            path=f.path,
+            content=f.content,
+            size=f.size,
         )
         for f in files
     ]
